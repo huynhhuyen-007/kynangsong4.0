@@ -1,0 +1,56 @@
+# ==========================================
+# PYTHON / BACKEND
+# ==========================================
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.env
+backend/.env.local
+backend/*.egg-info/
+backend/dist/
+backend/.pytest_cache/
+
+# ==========================================
+# FLUTTER / DART
+# ==========================================
+flutter_app/.dart_tool/
+flutter_app/build/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/.packages
+flutter_app/pubspec.lock
+
+# Flutter platform không dùng
+flutter_app/linux/
+flutter_app/macos/
+flutter_app/windows/
+flutter_app/web/
+
+# ==========================================
+# ANDROID
+# ==========================================
+flutter_app/android/.gradle/
+flutter_app/android/local.properties
+flutter_app/android/captures/
+flutter_app/android/app/debug/
+flutter_app/android/key.properties
+
+# ==========================================
+# IDE / EDITOR
+# ==========================================
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# MISC
+# ==========================================
+*.log
+*.tmp
+*.swp
