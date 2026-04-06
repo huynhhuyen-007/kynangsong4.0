@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../utils/api_service.dart';
+import '../utils/user_progress_manager.dart';
 import '../widgets/app_scaffold.dart';
+import 'news_detail_screen.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -9,199 +12,251 @@ class NewsScreen extends StatefulWidget {
   State<NewsScreen> createState() => _NewsScreenState();
 }
 
-class _NewsScreenState extends State<NewsScreen> {
-  final _emailCtrl = TextEditingController();
+class _NewsScreenState extends State<NewsScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<dynamic> _allNews = [];
+  List<dynamic> _hotNews = [];
+  bool _isLoading = true;
+  Set<String> _bookmarkedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadNews();
+    _loadBookmarks();
+  }
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _tabController.dispose();
     super.dispose();
   }
+
+  Future<void> _loadBookmarks() async {
+    final ids = await UserProgressManager.getBookmarkedNewsIds();
+    if (mounted) setState(() => _bookmarkedIds = Set.from(ids));
+  }
+
+  Future<void> _loadNews() async {
+    try {
+      final news = await ApiService.getNews();
+      if (mounted) {
+        // Sort "hot" = simulate by reverse index as surrogate (newest = hot in seed data)
+        final hot = List<dynamic>.from(news)..shuffle();
+        setState(() {
+          _allNews = news;
+          _hotNews = hot;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleBookmark(Map<String, dynamic> item) async {
+    final id = item['id'] ?? '';
+    await UserProgressManager.toggleBookmarkNews(id, item);
+    final ids = await UserProgressManager.getBookmarkedNewsIds();
+    if (mounted) {
+      setState(() => _bookmarkedIds = Set.from(ids));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          ids.contains(id) ? '🔖 Đã lưu bài viết' : 'Đã bỏ lưu',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: ids.contains(id) ? const Color(0xFF4F46E5) : Colors.grey.shade600,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+      ));
+    }
+  }
+
+  List<dynamic> get _bookmarkedNews =>
+      _allNews.where((n) => _bookmarkedIds.contains(n['id'])).toList();
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Tin Tức',
+      title: 'Tin tức & Cẩm nang',
       currentIndex: 4,
-      body: SingleChildScrollView(
-        child: Column(children: [_hero(), _articles(context), _eventsAndNewsletter(context)]),
-      ),
-    );
-  }
-
-  Widget _hero() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('TIN TỨC', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
-        Text('Bài viết & hoạt động mới', style: GoogleFonts.outfit(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 10),
-        Text('Tổng hợp bài viết ngắn, mẹo thực hành và câu chuyện truyền cảm hứng về kỹ năng sống.',
-            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14, height: 1.6)),
-        const SizedBox(height: 20),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _pill('📰 Cập nhật hằng tuần'),
-          _pill('📚 Dễ áp dụng'),
-          _pill('💬 Thảo luận'),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _pill(String t) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-        child: Text(t, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13)),
-      );
-
-  Widget _articles(BuildContext context) {
-    final posts = [
-      ('5 cách giúp con tự tin hơn', 'Những bước nhỏ để con dám nói, dám thử và dám sai.', '4 phút đọc', '🏷 Tự tin'),
-      ('Khi con tức giận, làm gì?', 'Kỹ thuật "dừng – thở – nói" giúp hạ nhiệt nhanh.', '3 phút đọc', '🏷 Cảm xúc'),
-      ('Thói quen 15 phút mỗi ngày', 'Biến mục tiêu lớn thành việc nhỏ và làm đều đặn.', '5 phút đọc', '🏷 Kỷ luật'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Bài viết nổi bật', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B))),
-        const SizedBox(height: 6),
-        Text('Chọn bài viết để đọc nhanh.', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14)),
-        const SizedBox(height: 16),
-        ...posts.map((p) => _postCard(context, p.$1, p.$2, p.$3, p.$4)),
-      ]),
-    );
-  }
-
-  Widget _postCard(BuildContext context, String title, String desc, String time, String tag) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0F2FE)),
-        boxShadow: [BoxShadow(color: const Color(0xFF0284C7).withValues(alpha: 0.07), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15, color: const Color(0xFF1E1B4B))),
-        const SizedBox(height: 6),
-        Text(desc, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade600)),
-        const SizedBox(height: 10),
-        Row(children: [
-          _tag('⏱ $time'),
-          const SizedBox(width: 8),
-          _tag(tag),
-          const Spacer(),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), minimumSize: Size.zero),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  title: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-                  content: Text('Nội dung bài viết đang được cập nhật. Sắp có! 📰', style: GoogleFonts.outfit()),
-                  actions: [
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text('OK', style: GoogleFonts.outfit()),
-                    ),
-                  ],
-                ),
-              );
-            },
-            child: Text('Đọc bài', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+      body: Column(
+        children: [
+          _buildTabBar(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildNewsList(_allNews),
+                      _buildNewsList(_hotNews),
+                      _buildNewsList(_bookmarkedNews, emptyMsg: 'Chưa có bài viết nào được lưu', emptyEmoji: '🔖'),
+                    ],
+                  ),
           ),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 
-  Widget _tag(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: const Color(0xFFE0F2FE), borderRadius: BorderRadius.circular(10)),
-        child: Text(text, style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF0284C7), fontWeight: FontWeight.w600)),
-      );
+  Widget _buildTabBar() {
+    return Container(
+      color: Colors.white,
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: const Color(0xFF0891B2),
+        indicatorWeight: 3,
+        labelColor: const Color(0xFF0891B2),
+        unselectedLabelColor: Colors.grey,
+        labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 13),
+        tabs: const [
+          Tab(icon: Icon(Icons.access_time_rounded, size: 16), text: 'Mới nhất'),
+          Tab(icon: Icon(Icons.local_fire_department_rounded, size: 16), text: 'Đang hot'),
+          Tab(icon: Icon(Icons.bookmark_rounded, size: 16), text: 'Đã lưu'),
+        ],
+      ),
+    );
+  }
 
-  Widget _eventsAndNewsletter(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE0F2FE))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('📅 Sự kiện sắp tới', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF1E1B4B))),
-            const SizedBox(height: 12),
-            ...[
-              ('Chủ nhật', 'Workshop: Giao tiếp tích cực trong gia đình'),
-              ('Thứ 4', 'Mini talk: Quản lý cảm xúc cho học sinh'),
-              ('Thứ 7', 'Thử thách 7 ngày: Thói quen tốt'),
-            ].map((e) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: const Color(0xFF0284C7), borderRadius: BorderRadius.circular(8)),
-                  child: Text(e.$1, style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(e.$2, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade700))),
-              ]),
-            )),
-          ]),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
+  Widget _buildNewsList(List<dynamic> list, {String? emptyMsg, String? emptyEmoji}) {
+    if (list.isEmpty) {
+      return Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(emptyEmoji ?? '📰', style: const TextStyle(fontSize: 56)),
+          const SizedBox(height: 16),
+          Text(emptyMsg ?? 'Chưa có tin tức nào', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 16)),
+        ]),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadNews,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+        itemCount: list.length,
+        itemBuilder: (context, index) => _buildNewsCard(list[index], index == 0 && _tabController.index == 0),
+      ),
+    );
+  }
+
+  Widget _buildNewsCard(dynamic item, bool isFeatured) {
+    final id = item['id'] ?? '';
+    final isBookmarked = _bookmarkedIds.contains(id);
+
+    if (isFeatured) {
+      // Featured card (first item on "Mới nhất" tab)
+      return GestureDetector(
+        onTap: () => _openDetail(item),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFFF0F9FF), Color(0xFFE0F2FE)]),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFBAE6FD)),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: const Color(0xFF0891B2).withValues(alpha: 0.15), blurRadius: 16, offset: const Offset(0, 6))],
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('📬 Đăng ký nhận bản tin', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF1E1B4B))),
-            const SizedBox(height: 6),
-            Text('Nhận 1 mẹo nhỏ mỗi tuần qua email.', style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14)),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    hintText: 'Email của bạn',
-                    hintStyle: GoogleFonts.outfit(fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    filled: true, fillColor: Colors.white,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(children: [
+              if (item['image_url'] != null && (item['image_url'] as String).isNotEmpty)
+                Image.network(item['image_url'], height: 220, width: double.infinity, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(height: 220, color: const Color(0xFF0891B2).withValues(alpha: 0.1))),
+              Container(
+                height: 220,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.75)],
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14)),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Đăng ký thành công! 🎉', style: GoogleFonts.outfit()),
-                    backgroundColor: const Color(0xFF0284C7),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ));
-                },
-                child: Text('Đăng ký', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+              Positioned(top: 12, left: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFF0891B2), borderRadius: BorderRadius.circular(8)),
+                  child: Text('✨ Nổi bật', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11)),
+                ),
+              ),
+              Positioned(top: 8, right: 8,
+                child: IconButton(
+                  onPressed: () => _toggleBookmark(item as Map<String, dynamic>),
+                  icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: Colors.white, size: 24),
+                ),
+              ),
+              Positioned(left: 16, right: 16, bottom: 16,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, height: 1.3)),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Icon(Icons.person_outline, size: 14, color: Colors.white70),
+                    const SizedBox(width: 4),
+                    Text(item['author'] ?? 'Admin', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                    const Spacer(),
+                    Text('Đọc ngay →', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ]),
+                ]),
               ),
             ]),
-          ]),
+          ),
         ),
-      ]),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _openDetail(item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Row(children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+            child: item['image_url'] != null && (item['image_url'] as String).isNotEmpty
+                ? Image.network(item['image_url'], width: 90, height: 90, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(width: 90, height: 90,
+                      color: const Color(0xFFEFF6FF), child: const Icon(Icons.article, color: Color(0xFF0891B2), size: 36)))
+                : Container(width: 90, height: 90, color: const Color(0xFFEFF6FF),
+                    child: const Icon(Icons.article_outlined, color: Color(0xFF0891B2), size: 36)),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(item['title'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, height: 1.3)),
+                const SizedBox(height: 4),
+                Text(item['summary'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 12)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  Text(item['author'] ?? 'Admin', style: GoogleFonts.outfit(color: const Color(0xFF0891B2), fontSize: 11, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Text('Đọc tiếp', style: GoogleFonts.outfit(color: const Color(0xFF0891B2), fontSize: 11, fontWeight: FontWeight.w700)),
+                ]),
+              ]),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _toggleBookmark(item as Map<String, dynamic>),
+            icon: Icon(
+              isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: isBookmarked ? const Color(0xFF4F46E5) : Colors.grey.shade400,
+              size: 22,
+            ),
+          ),
+        ]),
+      ),
     );
+  }
+
+  void _openDetail(dynamic item) {
+    // add XP for reading
+    UserProgressManager.addXp(2);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => NewsDetailScreen(newsItem: item)));
   }
 }

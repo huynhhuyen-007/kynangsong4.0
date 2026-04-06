@@ -9,6 +9,9 @@ import 'screens/fun_screen.dart';
 import 'screens/news_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/admin_screen.dart';
+import 'screens/community_screen.dart';
+import 'screens/admin_cms_screen.dart';
+import 'screens/copilot_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,12 +85,15 @@ class KyNangSongApp extends StatelessWidget {
       routes: {
         '/auth': (_) => const AuthScreen(),
         '/home': (_) => const HomeScreen(),
+        '/community': (_) => const CommunityScreen(),
         '/playground': (_) => const PlaygroundScreen(),
         '/skills': (_) => const SkillsScreen(),
         '/fun': (_) => const FunScreen(),
         '/news': (_) => const NewsScreen(),
         '/profile': (_) => const ProfileScreen(),
         '/admin': (_) => const AdminScreen(),
+        '/admin_cms': (_) => const AdminCmsScreen(),
+        '/copilot': (_) => const CopilotScreen(),
       },
     );
   }

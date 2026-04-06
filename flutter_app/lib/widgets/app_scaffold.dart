@@ -6,26 +6,29 @@ class AppScaffold extends StatelessWidget {
   final String title;
   final Widget body;
   final int currentIndex;
+  final Widget? floatingActionButton;
 
   const AppScaffold({
     super.key,
     required this.title,
     required this.body,
     required this.currentIndex,
+    this.floatingActionButton,
   });
 
-  static const _routes = ['/home', '/playground', '/skills', '/fun', '/news'];
-  static const _labels = ['Trang chủ', 'Sân chơi', 'Kỹ năng', 'Vui học', 'Tin tức'];
+  static const _routes = ['/home', '/community', '/skills', '/fun', '/news'];
+  static const _labels = ['Trang chủ', 'Cộng đồng', 'Kỹ năng', 'Vui học', 'Tin tức'];
   static const _icons = [
     Icons.home_outlined,
-    Icons.sports_esports_outlined,
+    Icons.people_outline_rounded,
     Icons.star_outline,
     Icons.lightbulb_outline,
     Icons.newspaper_outlined,
   ];
 
   void _navigate(BuildContext context, int index) {
-    if (index == currentIndex) return;
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    if (index == currentIndex && currentRoute != '/profile') return;
     Navigator.pushReplacementNamed(context, _routes[index]);
   }
 
@@ -137,12 +140,22 @@ class AppScaffold extends StatelessWidget {
                       const Divider(),
                       ListTile(
                         leading: const Icon(Icons.admin_panel_settings, color: Colors.orange),
-                        title: Text('Quản lý hệ thống',
+                        title: Text('Quản lý người dùng',
                             style: GoogleFonts.outfit(
                                 color: Colors.orange, fontWeight: FontWeight.w600)),
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.pushNamed(context, '/admin');
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.edit_note_rounded, color: Colors.deepOrange),
+                        title: Text('Quản lý nội dung',
+                            style: GoogleFonts.outfit(
+                                color: Colors.deepOrange, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(context, '/admin_cms');
                         },
                       ),
                     ],
@@ -190,6 +203,7 @@ class AppScaffold extends StatelessWidget {
         ),
       ),
       body: body,
+      floatingActionButton: floatingActionButton,
     );
   }
 }

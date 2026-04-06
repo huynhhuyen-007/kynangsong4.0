@@ -1,32 +1,108 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../utils/auth_manager.dart';
+import '../utils/api_service.dart';
+import '../utils/user_progress_manager.dart';
 import '../widgets/app_scaffold.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  String _userName = '';
+  Map<String, dynamic> _progress = {};
+  List<dynamic> _dailyTips = [];
+  bool _loading = true;
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _init() async {
+    final user = await AuthManager.getUser();
+    final progress = await UserProgressManager.getSummary();
+    List<dynamic> tipsToShow = [];
+    try {
+      final tips = await ApiService.getFun();
+      if (tips.isNotEmpty) {
+        tips.shuffle();
+        tipsToShow = tips.take(4).toList();
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _userName = user['name'] ?? '';
+        _progress = progress;
+        _dailyTips = tipsToShow;
+        _loading = false;
+      });
+      _animCtrl.forward();
+    }
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Chào buổi sáng';
+    if (h < 18) return 'Chào buổi chiều';
+    return 'Chào buổi tối';
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Kỹ Năng Sống 4.0',
+      title: 'Trang chủ',
       currentIndex: 0,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _heroSection(context),
-            _statsBand(context),
-            _skillPaths(context),
-            _testimonial(context),
-            _footer(context),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.pushNamed(context, '/copilot'),
+        backgroundColor: const Color(0xFF4F46E5),
+        icon: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+        label: Text('Hỏi AI', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeroHeader(),
+                    _buildXpStreakBar(),
+                    _buildDailyTip(),
+                    _buildSectionTitle('🚀 Khám phá nhanh'),
+                    _buildQuickGrid(),
+                    _buildSectionTitle('🎯 Hành trình học tập'),
+                    _buildJourneyCards(),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
-  Widget _heroSection(BuildContext context) {
+  Widget _buildHeroHeader() {
+    final streak = _progress['streak'] ?? 0;
     return Container(
+      width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
@@ -34,283 +110,323 @@ class HomeScreen extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 48),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Vui chơi · Rèn luyện · Học hỏi',
-              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 16),
           Text(
-            'Khám phá kỹ năng sống\ncùng không gian học tập hiện đại',
-            style: GoogleFonts.outfit(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              height: 1.3,
-            ),
+            _greeting() + ',',
+            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 15),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 4),
           Text(
-            'Một hành trình giúp các bạn nhỏ hình thành thói quen tích cực, '
-            'biết quản lý cảm xúc, giao tiếp tự tin và chủ động trước những thay đổi của thời đại số.',
+            _userName.isEmpty ? 'Bạn ơi 👋' : '$_userName 👋',
             style: GoogleFonts.outfit(
-              color: Colors.white.withValues(alpha: 0.85),
-              fontSize: 15,
-              height: 1.6,
+              fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white,
             ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF4F46E5),
-                ),
-                onPressed: () => Navigator.pushNamed(context, '/playground'),
-                child: const Text('Học thử ngay'),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white60),
-                ),
-                onPressed: () => Navigator.pushNamed(context, '/skills'),
-                child: const Text('Tìm hiểu lộ trình'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _heroBubble('Xin chào! 👋'),
-              _heroBubble('Cùng luyện kỹ năng nhé! 💪'),
-            ],
           ),
           const SizedBox(height: 12),
-          Text(
-            'Không yêu cầu kinh nghiệm · Bài học ngắn gọn · Áp dụng ngay',
-            style: GoogleFonts.outfit(fontSize: 12, color: Colors.white60),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroBubble(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white30),
-      ),
-      child: Text(text, style: GoogleFonts.outfit(color: Colors.white, fontSize: 13)),
-    );
-  }
-
-  Widget _statsBand(BuildContext context) {
-    final stats = [
-      ('+3.000', 'hoạt động', 'Bài học, câu hỏi, nhiệm vụ thực tế.'),
-      ('+60', 'chủ đề', 'Từ giao tiếp đến quản lý cảm xúc.'),
-      ('+90%', 'học sinh thích', 'Hứng thú với kỹ năng mềm mỗi ngày.'),
-      ('+50', 'video', 'Tình huống gần gũi đời sống.'),
-    ];
-    return Container(
-      color: const Color(0xFF1E1B4B),
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-      child: Column(
-        children: [
-          Text(
-            'Tại sao nên chọn "Sân chơi Kỹ năng sống trực tuyến"?',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Hệ thống bài học được thiết kế dưới dạng trò chơi và thử thách.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(color: Colors.white60, fontSize: 14),
-          ),
-          const SizedBox(height: 24),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.5,
-            children: stats.map((s) => Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          if (streak > 0)
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('🔥', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Chuỗi $streak ngày học liên tiếp!',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ]),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(s.$1, style: GoogleFonts.outfit(color: const Color(0xFFA78BFA), fontSize: 22, fontWeight: FontWeight.w800)),
-                  Text(s.$2, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                  Text(s.$3, style: GoogleFonts.outfit(color: Colors.white54, fontSize: 11)),
-                ],
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pushReplacementNamed(context, '/skills'),
+                icon: const Icon(Icons.rocket_launch_rounded, size: 20, color: Color(0xFF4F46E5)),
+                label: Text('Tiếp tục học', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 15)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), elevation: 6, shadowColor: Colors.black38),
               ),
-            )).toList(),
-          ),
+            ])
+          else
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '✨ Bắt đầu học hôm nay để tạo streak!',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pushReplacementNamed(context, '/skills'),
+                icon: const Icon(Icons.rocket_launch_rounded, size: 20, color: Color(0xFF4F46E5)),
+                label: Text('🚀 Học ngay', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 15)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), elevation: 6, shadowColor: Colors.black38),
+              ),
+            ]),
         ],
       ),
     );
   }
 
-  Widget _skillPaths(BuildContext context) {
-    final paths = [
-      ('Chặng 1: Hiểu bản thân', 'Tìm hiểu cảm xúc, sở thích và điểm mạnh để tự tin hơn.',
-        ['Nhật ký cảm xúc hàng ngày', 'Hoạt động "chiếc gương tích cực"', 'Nhận diện điều mình làm tốt'], '🧠'),
-      ('Chặng 2: Giao tiếp & hợp tác', 'Biết lắng nghe, chia sẻ và làm việc nhóm hiệu quả.',
-        ['Trò chơi luyện nói "cảm ơn" & "xin lỗi"', 'Đóng vai giải quyết mâu thuẫn', 'Nhiệm vụ làm việc nhóm nhỏ'], '🤝'),
-      ('Chặng 3: Tự lập & kỷ luật', 'Xây dựng thói quen tốt và biết chịu trách nhiệm.',
-        ['Bảng việc nhà mỗi ngày', 'Thử thách "15 phút tập trung"', 'Đánh giá lại một tuần đã qua'], '🏆'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Trau dồi kỹ năng qua các "chặng đường nhỏ"',
-            style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B))),
-          const SizedBox(height: 6),
-          Text('Mỗi chặng là một nhóm kỹ năng với câu chuyện riêng.',
-            style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 14)),
-          const SizedBox(height: 20),
-          ...paths.map((p) => _pathCard(context, p.$1, p.$2, p.$3, p.$4)),
-        ],
-      ),
-    );
-  }
+  Widget _buildXpStreakBar() {
+    final xp = _progress['xp'] ?? 0;
+    final level = _progress['level'] ?? 1;
+    final label = _progress['levelLabel'] ?? 'Người mới';
+    final completed = _progress['completedSkills'] ?? 0;
+    final saved = _progress['savedTips'] ?? 0;
 
-  Widget _pathCard(BuildContext context, String title, String desc, List<String> items, String emoji) {
+    // XP thresholds
+    final thresholds = [0, 20, 50, 100, 200, 999];
+    final nextXp = thresholds[level < thresholds.length - 1 ? level : thresholds.length - 1];
+    final prevXp = thresholds[level - 1 < thresholds.length ? level - 1 : 0];
+    final progress = nextXp > prevXp ? ((xp - prevXp) / (nextXp - prevXp)).clamp(0.0, 1.0) : 1.0;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0E7FF)),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF1E1B4B)))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFF4F46E5), borderRadius: BorderRadius.circular(20)),
+              child: Text('Lv.$level $label', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+            ),
+            const Spacer(),
+            Text('$xp XP', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 16)),
           ]),
-          const SizedBox(height: 8),
-          Text(desc, style: GoogleFonts.outfit(color: Colors.grey.shade600, fontSize: 13)),
           const SizedBox(height: 10),
-          ...items.map((item) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(children: [
-              const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF4F46E5)),
-              const SizedBox(width: 8),
-              Text(item, style: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade700)),
-            ]),
-          )),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF4F46E5), side: const BorderSide(color: Color(0xFF4F46E5))),
-              onPressed: () => Navigator.pushNamed(context, '/skills'),
-              child: const Text('Xem chi tiết'),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 1500),
+              curve: Curves.easeOutCubic,
+              builder: (ctx, val, child) => LinearProgressIndicator(
+                value: val,
+                backgroundColor: const Color(0xFFEEF2FF),
+                valueColor: AlwaysStoppedAnimation<Color>(val > 0.0 ? const Color(0xFF4F46E5) : const Color(0xFF9CA3AF)),
+                minHeight: 12,
+              ),
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            nextXp < 999 ? 'Cần thêm ${nextXp - xp} XP để lên Lv.${level + 1}' : '🎉 Đã đạt cấp cao nhất!',
+            style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 14),
+          Row(children: [
+            _miniStat('🏅', '$completed', 'Kỹ năng'),
+            _miniStat('💾', '$saved', 'Mẹo đã lưu'),
+            _miniStat('🔥', '${_progress['streak'] ?? 0}', 'Ngày streak'),
+          ]),
         ],
       ),
     );
   }
 
-  Widget _testimonial(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFEEF2FF), Color(0xFFF5F3FF)]),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E7FF)),
-      ),
+  Widget _miniStat(String emoji, String val, String label) {
+    return Expanded(
       child: Column(children: [
-        const Text('⭐⭐⭐⭐⭐', style: TextStyle(fontSize: 22)),
-        const SizedBox(height: 12),
-        Text(
-          '"Sau vài tuần tham gia, con biết chia sẻ cảm xúc của mình, chủ động giúp đỡ mọi người và thích thú với các thử thách nhỏ mỗi ngày."',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.outfit(fontSize: 15, color: const Color(0xFF1E1B4B), fontStyle: FontStyle.italic, height: 1.6),
+        Text(emoji, style: const TextStyle(fontSize: 20)),
+        const SizedBox(height: 2),
+        Text(val, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: const Color(0xFF1E1B4B))),
+        Text(label, style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade500)),
+      ]),
+    );
+  }
+
+  Widget _buildDailyTip() {
+    if (_dailyTips.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+        child: Row(children: [
+          const Text('💡', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Text('Mẹo hôm nay', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFFD97706), fontSize: 16)),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/fun'),
+            child: Text('Tất cả mẹo →', style: GoogleFonts.outfit(color: const Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+      ),
+      SizedBox(
+        height: 150,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          itemCount: _dailyTips.length,
+          itemBuilder: (ctx, i) {
+            final tip = _dailyTips[i];
+            return Container(
+              width: 280,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFFFF7ED), Color(0xFFFFFBEB)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFBBF24).withValues(alpha: 0.4)),
+                boxShadow: [BoxShadow(color: const Color(0xFFD97706).withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(tip['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15, color: const Color(0xFFB45309))),
+                const SizedBox(height: 6),
+                Expanded(child: Text(tip['content'] ?? '', maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(color: Colors.grey.shade800, fontSize: 13, height: 1.5))),
+              ]),
+            );
+          },
         ),
+      ),
+    ]);
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      child: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B))),
+    );
+  }
+
+  Widget _buildQuickGrid() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(children: [
+        _quickCardHero('📚 Khoá Học Mới', 'Cải thiện kỹ năng mềm ngay hôm nay', Icons.rocket_launch_rounded, const Color(0xFF4F46E5), '/skills'),
         const SizedBox(height: 12),
-        Text('— Phụ huynh lớp 4, Hà Nội',
-          style: GoogleFonts.outfit(color: Colors.grey.shade600, fontWeight: FontWeight.w600, fontSize: 13)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(color: const Color(0xFF4F46E5), borderRadius: BorderRadius.circular(20)),
-          child: Text('Hơn 5.000+ gia đình đã trải nghiệm',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        Row(children: [
+          Expanded(child: _quickCardSmall('Sân Chơi', Icons.videogame_asset_rounded, const Color(0xFF059669), '/playground')),
+          const SizedBox(width: 12),
+          Expanded(child: _quickCardSmall('Mẹo Vặt', Icons.lightbulb_rounded, const Color(0xFFD97706), '/fun')),
+          const SizedBox(width: 12),
+          Expanded(child: _quickCardSmall('Tin Tức', Icons.newspaper_rounded, const Color(0xFF0891B2), '/news')),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _quickCardHero(String title, String sub, IconData icon, Color color, String route) {
+    return InkWell(
+      onTap: () => Navigator.pushReplacementNamed(context, route),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [color, color.withRed(100)]),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        ),
+        child: Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+            const SizedBox(height: 6),
+            Text(sub, style: GoogleFonts.outfit(fontSize: 13, color: Colors.white.withValues(alpha: 0.8))),
+          ])),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 40),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _quickCardSmall(String title, IconData icon, Color color, String route) {
+    return InkWell(
+      onTap: () => Navigator.pushReplacementNamed(context, route),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 4))],
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: color, size: 30),
+          const SizedBox(height: 10),
+          Text(title, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B))),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildJourneyCards() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(children: [
+        _journeyCard(
+          '📚 Đọc bài viết',
+          'Tin tức mới nhất về kỹ năng sống',
+          'Vào Tin tức →',
+          const Color(0xFF0891B2),
+          () => Navigator.pushReplacementNamed(context, '/news'),
+        ),
+        const SizedBox(height: 10),
+        _journeyCard(
+          '💡 Học mẹo vặt',
+          'Áp dụng ngay vào cuộc sống hàng ngày',
+          'Vào Mẹo vặt →',
+          const Color(0xFFD97706),
+          () => Navigator.pushReplacementNamed(context, '/fun'),
+        ),
+        const SizedBox(height: 10),
+        _journeyCard(
+          '💬 Chia sẻ cộng đồng',
+          'Thảo luận và học từ trải nghiệm thật',
+          'Vào Cộng đồng →',
+          const Color(0xFF7C3AED),
+          () => Navigator.pushReplacementNamed(context, '/community'),
         ),
       ]),
     );
   }
 
-  Widget _footer(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 32),
-      padding: const EdgeInsets.all(24),
-      color: const Color(0xFF1E1B4B),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Kỹ Năng Sống 4.0',
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
-          const SizedBox(height: 6),
-          Text('Đồng hành cùng gia đình trong hành trình nuôi dưỡng những công dân tự tin.',
-            style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13)),
-          const SizedBox(height: 16),
-          const Divider(color: Colors.white12),
-          const SizedBox(height: 12),
-          Row(children: [
-            const Icon(Icons.email_outlined, color: Colors.white54, size: 16),
-            const SizedBox(width: 8),
-            Text('knsong@example.com', style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13)),
-          ]),
-          const SizedBox(height: 6),
-          Row(children: [
-            const Icon(Icons.phone_outlined, color: Colors.white54, size: 16),
-            const SizedBox(width: 8),
-            Text('0123 456 789', style: GoogleFonts.outfit(color: Colors.white54, fontSize: 13)),
-          ]),
-          const SizedBox(height: 16),
-          Text('© ${DateTime.now().year} Kỹ Năng Sống 4.0 · Học – chơi – lớn lên mỗi ngày',
-            style: GoogleFonts.outfit(color: Colors.white38, fontSize: 12)),
-        ],
+  Widget _journeyCard(String title, String subtitle, String cta, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.07), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Row(children: [
+          Container(
+            width: 4, height: 40,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: const Color(0xFF1E1B4B))),
+            const SizedBox(height: 3),
+            Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+          ])),
+          Text(cta, style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+        ]),
       ),
     );
   }
