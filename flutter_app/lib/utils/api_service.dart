@@ -269,6 +269,83 @@ class ApiService {
     if (response.statusCode == 200) return body as Map<String, dynamic>;
     throw ApiException(body['detail'] ?? 'Lỗi kết nối AI');
   }
+
+  // ── Phase 2: Exam System ──────────────────────────────────────────────────
+
+  /// Lấy danh sách câu hỏi cho 1 vòng thi
+  static Future<List<dynamic>> getExamQuestions(int roundId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/exam/questions/$roundId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    }
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    throw ApiException(body['detail'] ?? 'Lỗi tải câu hỏi');
+  }
+
+  /// Nộp bài thi và nhận kết quả chấm điểm
+  static Future<Map<String, dynamic>> submitExam({
+    required String userId,
+    required int roundId,
+    required List<Map<String, dynamic>> answers,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/exam/submit'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({'user_id': userId, 'round_id': roundId, 'answers': answers}),
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200) return body as Map<String, dynamic>;
+    throw ApiException(body['detail'] ?? 'Lỗi nộp bài');
+  }
+
+  /// Lấy tiến độ Map của user (current_round, skill_stats...)
+  static Future<Map<String, dynamic>> getExamProgress(String userId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/exam/progress/$userId'));
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    }
+    throw ApiException('Lỗi tải tiến độ');
+  }
+
+  // ── Phase 3: AI Personalized Recommendation ───────────────────────────────
+
+  /// AI phân tích kết quả và đưa ra lộ trình cá nhân hóa
+  static Future<Map<String, dynamic>> recommendPath({
+    required String userId,
+    required int roundId,
+    required int correctCount,
+    required int totalQuestions,
+    required Map<String, dynamic> skillStats,
+    required bool passed,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/ai/recommend-path'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'user_id': userId,
+        'round_id': roundId,
+        'correct_count': correctCount,
+        'total_questions': totalQuestions,
+        'skill_stats': skillStats,
+        'passed': passed,
+      }),
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200) return body as Map<String, dynamic>;
+    throw ApiException(body['detail'] ?? 'Lỗi AI phân tích');
+  }
+
+  /// AI Chat context-aware (biết tiến độ học của user)
+  static Future<Map<String, dynamic>> contextChat(String query, String userId) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/ai/context-chat'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({'query': query, 'user_id': userId, 'include_progress': true}),
+    );
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200) return body as Map<String, dynamic>;
+    throw ApiException(body['detail'] ?? 'Lỗi AI chat');
+  }
 }
 
 class ApiException implements Exception {

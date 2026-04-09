@@ -8,17 +8,23 @@ from typing import Optional
 import os
 import shutil
 from bson import ObjectId
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, Field
 
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 # Setup Gemini AI
-genai.configure(api_key="AIzaSyCZXteDW3snOAIYeAZ9vQeB4lrff23w1YA")
+genai_api_key = os.environ.get("GEMINI_API_KEY", "YOUR_NEW_API_KEY_HERE")
+genai.configure(api_key=genai_api_key)
 
 # ── Cấu hình MongoDB ──────────────────────────────────────────────────────────
 # Mặc định kết nối MongoDB cài local.
@@ -90,6 +96,13 @@ async def lifespan(app: FastAPI):
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 app = FastAPI(title="Ky Nang Song Auth API - MongoDB", lifespan=lifespan)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Lỗi định dạng dữ liệu (có thể do nhập sai khoảng trắng/Email): " + str(exc.errors()[0]['msg'])},
+    )
 
 os.makedirs("static/avatars", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -623,7 +636,7 @@ Yêu cầu:
 Câu hỏi của người dùng: {body.query}
 """
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         response = await model.generate_content_async(prompt)
         answer = response.text
         
@@ -661,6 +674,461 @@ Câu hỏi của người dùng: {body.query}
                         "category": s.get("category"),
                     })
         
+        return {"answer": answer, "related_skills": related_skills}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── PHASE 2: Exam System API ──────────────────────────────────────────────────
+# Pydantic Models
+
+class ExamSubmit(BaseModel):
+    user_id: str
+    round_id: int
+    answers: list[dict]  # [{"question_id": "...", "selected": 0}, ...]
+
+
+class ProgressUpdate(BaseModel):
+    user_id: str
+    round_id: int
+
+
+# ─── Helper: Lấy / tạo mới UserExamProgress ───────────────────────────────────
+async def _get_or_create_progress(user_id: str) -> dict:
+    col = mongo_client[DB_NAME]["user_exam_progress"]
+    doc = await col.find_one({"user_id": user_id})
+    if not doc:
+        doc = {
+            "user_id": user_id,
+            "current_round": 1,
+            "total_exam_points": 0,
+            "skill_stats": {
+                "communication": 0,
+                "emotion": 0,
+                "finance": 0,
+                "critical_thinking": 0,
+                "teamwork": 0,
+                "health": 0,
+            },
+            "completed_rounds": [],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        result = await col.insert_one(doc)
+        doc["_id"] = result.inserted_id
+    return doc
+
+
+# ─── API: Lấy câu hỏi theo vòng ──────────────────────────────────────────────
+@app.get("/api/exam/questions/{round_id}")
+async def get_exam_questions(round_id: int):
+    """Lấy ngẫu nhiên 5 câu hỏi thuộc vòng này (theo round_id)."""
+    col = mongo_client[DB_NAME]["questions"]
+    cursor = col.find({"round_id": round_id})
+    questions = await cursor.to_list(length=100)
+
+    if not questions:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Chưa có câu hỏi cho vòng {round_id}. Hãy seed data trước."
+        )
+
+    import random
+    sampled = random.sample(questions, min(5, len(questions)))
+
+    return [
+        {
+            "id": str(q["_id"]),
+            "content": q.get("content", ""),
+            "options": q.get("options", []),
+            "skill_tag": q.get("skill_tag", ""),
+            # KHÔNG trả về correct_answer để tránh gian lận
+        }
+        for q in sampled
+    ]
+
+
+# ─── API: Nộp bài & chấm điểm ────────────────────────────────────────────────
+@app.post("/api/exam/submit")
+async def submit_exam(body: ExamSubmit):
+    """
+    Chấm bài thi:
+    - Kiểm tra đáp án, tính điểm theo câu đúng
+    - Cập nhật skill_stats theo skill_tag của từng câu sai/đúng
+    - Nâng current_round nếu đạt ≥ 60% (3/5 câu)
+    - Trả về kết quả chi tiết cho Flutter hiển thị
+    """
+    q_col = mongo_client[DB_NAME]["questions"]
+    progress_col = mongo_client[DB_NAME]["user_exam_progress"]
+
+    # Lấy thông tin câu hỏi từ DB
+    results = []
+    correct_count = 0
+    skill_delta: dict[str, int] = {}  # skill_tag -> điểm tích lũy
+
+    for ans in body.answers:
+        try:
+            q = await q_col.find_one({"_id": ObjectId(ans["question_id"])})
+        except Exception:
+            continue
+        if not q:
+            continue
+
+        is_correct = ans.get("selected") == q.get("correct_answer")
+        skill_tag = q.get("skill_tag", "communication")
+
+        if is_correct:
+            correct_count += 1
+            skill_delta[skill_tag] = skill_delta.get(skill_tag, 0) + 10
+        else:
+            skill_delta[skill_tag] = skill_delta.get(skill_tag, 0) - 5
+
+        results.append({
+            "question_id": ans["question_id"],
+            "content": q.get("content", ""),
+            "selected": ans.get("selected"),
+            "correct_answer": q.get("correct_answer"),
+            "is_correct": is_correct,
+            "skill_tag": skill_tag,
+            "explanation": q.get("explanation", ""),
+        })
+
+    total_questions = len(results)
+    passed = correct_count >= max(1, total_questions * 0.6)  # ≥ 60% để vượt vòng
+    points_earned = correct_count * 20  # 20 điểm / câu đúng
+
+    # ── Cập nhật tiến độ user ──
+    progress = await _get_or_create_progress(body.user_id)
+    current_round = progress.get("current_round", 1)
+    completed_rounds = progress.get("completed_rounds", [])
+
+    # Cập nhật skill_stats
+    new_skill_stats = dict(progress.get("skill_stats", {}))
+    for tag, delta in skill_delta.items():
+        new_skill_stats[tag] = max(0, new_skill_stats.get(tag, 0) + delta)
+
+    # Nâng vòng nếu pass và chưa vượt vòng này
+    if passed and body.round_id not in completed_rounds:
+        completed_rounds.append(body.round_id)
+        new_round = max(current_round, body.round_id + 1)
+    else:
+        new_round = current_round
+
+    await progress_col.update_one(
+        {"user_id": body.user_id},
+        {
+            "$set": {
+                "current_round": new_round,
+                "skill_stats": new_skill_stats,
+                "completed_rounds": completed_rounds,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$inc": {"total_exam_points": points_earned},
+        },
+        upsert=True,
+    )
+
+    return {
+        "passed": passed,
+        "correct_count": correct_count,
+        "total_questions": total_questions,
+        "points_earned": points_earned,
+        "new_round": new_round,
+        "skill_stats": new_skill_stats,
+        "results": results,
+    }
+
+
+# ─── API: Lấy tiến độ user trên Map ──────────────────────────────────────────
+@app.get("/api/exam/progress/{user_id}")
+async def get_exam_progress(user_id: str):
+    """Lấy current_round, skill_stats, total_points của user để hiển thị Map."""
+    progress = await _get_or_create_progress(user_id)
+    return {
+        "current_round": progress.get("current_round", 1),
+        "total_exam_points": progress.get("total_exam_points", 0),
+        "skill_stats": progress.get("skill_stats", {}),
+        "completed_rounds": progress.get("completed_rounds", []),
+    }
+
+
+# ─── API: Admin seed câu hỏi mẫu ─────────────────────────────────────────────
+class QuestionCreate(BaseModel):
+    admin_id: str
+    round_id: int
+    content: str
+    options: list[str]          # 4 đáp án, ví dụ ["A. ...", "B. ...", "C. ...", "D. ..."]
+    correct_answer: int          # index 0-3
+    skill_tag: str               # "communication" | "emotion" | "finance" | ...
+    explanation: str = ""
+
+
+@app.post("/api/admin/exam/questions")
+async def create_question(body: QuestionCreate):
+    """Admin thêm câu hỏi mới vào ngân hàng đề."""
+    await _check_admin(body.admin_id)
+    col = mongo_client[DB_NAME]["questions"]
+    doc = {
+        "round_id": body.round_id,
+        "content": body.content,
+        "options": body.options,
+        "correct_answer": body.correct_answer,
+        "skill_tag": body.skill_tag,
+        "explanation": body.explanation,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = await col.insert_one(doc)
+    return {"id": str(result.inserted_id), **doc}
+
+
+@app.get("/api/admin/exam/questions")
+async def list_all_questions(admin_id: str):
+    """Admin xem toàn bộ ngân hàng đề."""
+    await _check_admin(admin_id)
+    col = mongo_client[DB_NAME]["questions"]
+    cursor = col.find().sort("round_id", 1)
+    questions = await cursor.to_list(length=1000)
+    return [
+        {
+            "id": str(q["_id"]),
+            "round_id": q.get("round_id"),
+            "content": q.get("content", ""),
+            "options": q.get("options", []),
+            "correct_answer": q.get("correct_answer"),
+            "skill_tag": q.get("skill_tag", ""),
+            "explanation": q.get("explanation", ""),
+        }
+        for q in questions
+    ]
+
+
+# ── PHASE 3: AI Personalized Learning Path ────────────────────────────────────
+
+# Tên kỹ năng tiếng Việt để AI đọc hiểu
+_SKILL_TAG_VI = {
+    "communication":     "Kỹ năng Giao Tiếp",
+    "emotion":           "Quản lý Cảm Xúc",
+    "finance":           "Quản lý Tài Chính",
+    "critical_thinking": "Tư Duy Phản Biện & Quản Lý Thời Gian",
+    "teamwork":          "Làm Việc Nhóm",
+    "health":            "Sức Khỏe & Thể Chất",
+}
+
+# Map label → vòng học tương ứng để AI gợi ý ôn lại
+_SKILL_TAG_ROUND = {
+    "communication":     [1, 2],
+    "emotion":           [2, 3],
+    "finance":           [9],
+    "critical_thinking": [4, 5],
+    "teamwork":          [7],
+    "health":            [10],
+}
+
+
+class RecommendRequest(BaseModel):
+    user_id: str
+    round_id: int           # Vòng vừa thi xong
+    correct_count: int
+    total_questions: int
+    skill_stats: dict       # Kết quả skill_stats hiện tại (sau cập nhật)
+    passed: bool
+
+
+@app.post("/api/ai/recommend-path")
+async def ai_recommend_path(body: RecommendRequest):
+    """
+    Phase 3: AI Gemini phân tích kết quả thi cụ thể của user và đưa ra:
+    - Nhận xét điểm mạnh / yếu theo skill_tag
+    - Gợi ý vòng tiếp theo / ôn lại
+    - Lời động viên cá nhân hóa
+    """
+    # ── Xây dựng bảng phân tích skill ──
+    skill_lines = []
+    weak_skills = []
+    strong_skills = []
+
+    for tag, score in body.skill_stats.items():
+        vi_name = _SKILL_TAG_VI.get(tag, tag)
+        score_int = int(score)
+        if score_int > 0:
+            skill_lines.append(f"  - {vi_name}: {score_int} điểm")
+            if score_int >= 20:
+                strong_skills.append(vi_name)
+            elif score_int < 10:
+                weak_skills.append(vi_name)
+
+    skill_summary = "\n".join(skill_lines) if skill_lines else "  - Chưa có dữ liệu"
+    weak_str = ", ".join(weak_skills) if weak_skills else "không có"
+    strong_str = ", ".join(strong_skills) if strong_skills else "đang phát triển"
+
+    status = "PASSED - Vượt vòng thành công" if body.passed else "FAILED - Chưa đạt yêu cầu"
+    accuracy = round(body.correct_count / max(body.total_questions, 1) * 100)
+
+    prompt = f"""Bạn là AI Mentor kỹ năng sống thông minh tên "Owl" (Cú Học Thuật) trong ứng dụng giáo dục Kỹ Năng Sống 4.0.
+
+DỮ LIỆU HỌC VIÊN vừa hoàn thành Vòng {body.round_id}:
+- Kết quả: {status}
+- Điểm chính xác: {body.correct_count}/{body.total_questions} câu ({accuracy}%)
+- Điểm mạnh: {strong_str}
+- Điểm cần cải thiện: {weak_str}
+- Bảng điểm kỹ năng tích lũy:
+{skill_summary}
+
+NHIỆM VỤ: Viết phân tích ngắn (3-4 câu) theo đúng format sau. KHÔNG thêm bất kỳ text nào ngoài format:
+
+🦉 **Nhận xét:** [1 câu nhận xét thẳng thắn về kết quả vừa thi - có dữ liệu cụ thể]
+💪 **Điểm mạnh:** [1 câu khen ngợi kỹ năng tốt nhất]
+🎯 **Cần cải thiện:** [1 câu chỉ ra kỹ năng yếu nhất và lý do cần luyện]
+🚀 **Gợi ý tiếp theo:** [1 câu cụ thể về vòng nên tập trung hoặc ôn lại]
+
+Giọng điệu: Thân thiện như người mentor, động viên nhưng thực tế. Dùng tiếng Việt tự nhiên."""
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        response = await model.generate_content_async(prompt)
+        advice = response.text.strip()
+
+        # Ghi nhận vào lịch sử AI (để Copilot biết context)
+        history_col = mongo_client[DB_NAME]["ai_recommendations"]
+        await history_col.insert_one({
+            "user_id": body.user_id,
+            "round_id": body.round_id,
+            "passed": body.passed,
+            "accuracy": accuracy,
+            "skill_stats": body.skill_stats,
+            "ai_advice": advice,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        return {
+            "advice": advice,
+            "weak_skills": weak_skills,
+            "strong_skills": strong_skills,
+            "accuracy": accuracy,
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Nâng cấp AI Chat: Context-Aware với tiến độ học ─────────────────────────
+class ContextChatRequest(BaseModel):
+    query: str
+    user_id: str
+    include_progress: bool = True   # Có đưa skill_stats vào context không
+
+
+@app.post("/api/ai/context-chat")
+async def ai_context_chat(body: ContextChatRequest):
+    """
+    Phase 3: AI Chat nâng cao — tự động load skill_stats và lịch sử gần nhất
+    để trả lời cá nhân hóa hơn.
+    """
+    context_block = ""
+
+    if body.include_progress:
+        try:
+            # Load exam progress
+            progress = await _get_or_create_progress(body.user_id)
+            skill_stats = progress.get("skill_stats", {})
+            current_round = progress.get("current_round", 1)
+            total_points = progress.get("total_exam_points", 0)
+
+            # Tìm kỹ năng yếu nhất (điểm thấp nhất trong số có dữ liệu)
+            active_skills = {k: v for k, v in skill_stats.items() if v > 0}
+            if active_skills:
+                weakest_tag = min(active_skills, key=lambda k: active_skills[k])
+                weakest_name = _SKILL_TAG_VI.get(weakest_tag, weakest_tag)
+            else:
+                weakest_name = "chưa xác định"
+
+            # Load lời khuyên AI gần nhất
+            hist_col = mongo_client[DB_NAME]["ai_recommendations"]
+            last_rec = await hist_col.find_one(
+                {"user_id": body.user_id},
+                sort=[("created_at", -1)]
+            )
+            last_advice_summary = ""
+            if last_rec:
+                last_advice_summary = (
+                    f"\nLần thi gần nhất: Vòng {last_rec.get('round_id', '?')}, "
+                    f"đạt {last_rec.get('accuracy', 0)}%."
+                )
+
+            skill_desc_parts = []
+            for tag, score in skill_stats.items():
+                if score > 0:
+                    skill_desc_parts.append(f"{_SKILL_TAG_VI.get(tag, tag)}: {int(score)}đ")
+
+            skill_desc = ", ".join(skill_desc_parts) if skill_desc_parts else "chưa có dữ liệu thi"
+
+            context_block = f"""
+[THÔNG TIN HỌC VIÊN - Dùng để cá nhân hóa câu trả lời]:
+- Đang ở Vòng {current_round} trên bản đồ kỹ năng (tổng 16 vòng)
+- Tổng điểm tích lũy: {total_points} XP
+- Bảng kỹ năng: {skill_desc}
+- Kỹ năng cần ưu tiên cải thiện: {weakest_name}{last_advice_summary}
+[Hãy tự nhiên đề cập đến dữ liệu này nếu phù hợp, không đọc nguyên văn]
+"""
+        except Exception:
+            pass  # Nếu lỗi load progress, vẫn tiếp tục chat bình thường
+
+    prompt = f"""Bạn là AI Life Skill Copilot "Owl" - Trợ lý kỹ năng sống thông minh dành cho sinh viên Việt Nam.
+{context_block}
+Yêu cầu trả lời:
+- Ngắn gọn, rõ ràng, thực tiễn (không quá 200 từ).
+- Cá nhân hóa nếu có dữ liệu học viên.
+- Format Markdown chính xác:
+✅ **Tình huống:** [Phân tích ngắn 1 dòng]
+⚠️ **Điều cần tránh:** [Lưu ý những sai lầm]
+📌 **Các bước xử lý:**
+- [Bước 1]
+- ...
+💡 **Lời khuyên thêm:** [Tip hay, nếu liên quan đến kỹ năng đang yếu của user thì đề cập]
+
+Câu hỏi: {body.query}"""
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        response = await model.generate_content_async(prompt)
+        answer = response.text
+
+        # Tìm skill liên quan trong DB
+        query_lower = body.query.lower()
+        search_keywords = []
+        if any(w in query_lower for w in ["cháy", "lửa", "hỏa hoạn"]):
+            search_keywords.extend(["cháy", "hỏa hoạn", "sơ cứu"])
+        elif any(w in query_lower for w in ["máu", "cấp cứu", "thương", "ngất", "sơ cứu"]):
+            search_keywords.extend(["sơ cứu", "máu"])
+        elif any(w in query_lower for w in ["tiền", "tài chính", "ngân hàng", "lừa đảo", "tiết kiệm"]):
+            search_keywords.extend(["tài chính", "ngân hàng"])
+        elif any(w in query_lower for w in ["giao tiếp", "thuyết trình", "căng thẳng", "stress", "tự tin"]):
+            search_keywords.extend(["giao tiếp", "thuyết trình"])
+        else:
+            search_keywords.extend(query_lower.split()[:3])
+
+        related_skills = []
+        if search_keywords:
+            skills_col = mongo_client[DB_NAME]["skills"]
+            regex_pattern = "|".join([k for k in search_keywords if len(k) > 2])
+            if regex_pattern:
+                cursor = skills_col.find({
+                    "$or": [
+                        {"title": {"$regex": regex_pattern, "$options": "i"}},
+                        {"description": {"$regex": regex_pattern, "$options": "i"}}
+                    ]
+                }).limit(2)
+                skills = await cursor.to_list(length=2)
+                for s in skills:
+                    related_skills.append({
+                        "id": str(s["_id"]),
+                        "title": s.get("title"),
+                        "image_url": s.get("image_url"),
+                        "category": s.get("category"),
+                    })
+
         return {"answer": answer, "related_skills": related_skills}
     except Exception as e:
         import traceback

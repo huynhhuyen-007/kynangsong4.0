@@ -25,7 +25,7 @@ class _CopilotScreenState extends State<CopilotScreen>
     {
       'isBot': true,
       'text':
-          'Chào bạn! Mình là **AI Life Skill Copilot** 🤖\n\nMình có thể giúp bạn giải quyết các tình huống thực tế trong cuộc sống. Chọn gợi ý bên dưới hoặc hỏi bất cứ điều gì nhé!',
+          'Chào bạn! Mình là **🦉 AI Mentor Owl** - Trợ lý kỹ năng sống thông minh!\n\nMình đã kết nối với hồ sơ học tập của bạn và sẽ đưa ra lời khuyên **cá nhân hóa** dựa trên tiến độ trên bản đồ kỹ năng. Hãy hỏi bất kỳ điều gì nhé!',
       'skills': [],
       'feedback': null, // null = chưa feedback, true = hữu ích, false = không
     }
@@ -92,7 +92,9 @@ class _CopilotScreenState extends State<CopilotScreen>
     _scrollToBottom();
 
     try {
-      final response = await ApiService.askAi(query, _userId);
+      // Phase 3: Dùng context-chat thay vì chat thông thường
+      // → AI tự động load skill_stats để trả lời cá nhân hóa
+      final response = await ApiService.contextChat(query, _userId);
       if (mounted) {
         setState(() {
           _messages.add({
@@ -293,7 +295,7 @@ class _CopilotScreenState extends State<CopilotScreen>
                     context,
                     MaterialPageRoute(
                         builder: (_) =>
-                            SkillDetailScreen(skillId: s['id'])),
+                            SkillDetailScreen(skillItem: s)),
                   ),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
@@ -397,7 +399,7 @@ class _CopilotScreenState extends State<CopilotScreen>
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'AI Copilot',
-      currentIndex: 0,
+      currentIndex: -1,
       body: Container(
         color: const Color(0xFFF5F6FA),
         child: Column(

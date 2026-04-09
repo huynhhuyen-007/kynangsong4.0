@@ -28,8 +28,8 @@ class AppScaffold extends StatelessWidget {
 
   void _navigate(BuildContext context, int index) {
     final currentRoute = ModalRoute.of(context)?.settings.name;
-    if (index == currentIndex && currentRoute != '/profile') return;
-    Navigator.pushReplacementNamed(context, _routes[index]);
+    if (currentIndex >= 0 && index == currentIndex && currentRoute != '/profile') return;
+    Navigator.pushNamedAndRemoveUntil(context, _routes[index], (route) => false);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -39,8 +39,17 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final bool isPushedSubScreen = currentRoute == '/profile' || currentRoute == '/copilot' || currentRoute == '/news_detail' || currentRoute == '/post_detail';
+
     return Scaffold(
       appBar: AppBar(
+        leading: isPushedSubScreen
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: Row(
           children: [
             Container(
@@ -72,7 +81,7 @@ class AppScaffold extends StatelessWidget {
             DrawerHeader(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                  colors: [Color(0xFF1E1B4B), Color(0xFF4F46E5)], // Darker sci-fi gradient
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -82,55 +91,117 @@ class AppScaffold extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Center(
-                      child: Text('KNS',
-                          style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF4F46E5),
-                              fontSize: 14)),
-                    ),
+                        gradient: const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF3B82F6)]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))
+                        ]),
+                    child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 28),
                   ),
                   const SizedBox(height: 12),
                   Text('Kỹ Năng Sống 4.0',
                       style: GoogleFonts.outfit(
                           color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700)),
-                  Text('Vui học – Rèn luyện – Khám phá',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5)),
+                  Text('Skill Up Your Life ✦',
                       style: GoogleFonts.outfit(
-                          color: Colors.white70, fontSize: 12)),
+                          color: const Color(0xFFA78BFA), fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
             for (int i = 0; i < _labels.length; i++)
-              ListTile(
-                leading: Icon(_icons[i],
-                    color: i == currentIndex
-                        ? const Color(0xFF4F46E5)
-                        : Colors.grey.shade600),
-                title: Text(_labels[i],
-                    style: GoogleFonts.outfit(
-                      fontWeight: i == currentIndex
-                          ? FontWeight.w700
-                          : FontWeight.w500,
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: i == currentIndex 
+                    ? LinearGradient(colors: [const Color(0xFF4F46E5).withValues(alpha: 0.15), Colors.transparent])
+                    : null,
+                  borderRadius: BorderRadius.circular(12),
+                  border: i == currentIndex
+                    ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4))
+                    : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+                ),
+                child: ListTile(
+                  leading: Icon(_icons[i],
                       color: i == currentIndex
                           ? const Color(0xFF4F46E5)
-                          : Colors.grey.shade800,
-                    )),
-                selected: i == currentIndex,
-                selectedTileColor: const Color(0xFFEEF2FF),
+                          : Colors.grey.shade600),
+                  title: Text(_labels[i],
+                      style: GoogleFonts.outfit(
+                        fontWeight: i == currentIndex
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: i == currentIndex
+                            ? const Color(0xFF4F46E5)
+                            : Colors.grey.shade800,
+                      )),
+                  selected: i == currentIndex,
+                  selectedTileColor: Colors.transparent, // Nền đã dùng ở Container
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _navigate(context, i);
+                  },
+                ),
+              ),
+            const Divider(),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
+                  ? LinearGradient(colors: [const Color(0xFF059669).withValues(alpha: 0.15), Colors.transparent])
+                  : null,
+                borderRadius: BorderRadius.circular(12),
+                border: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
+                  ? const Border(left: BorderSide(color: Color(0xFF059669), width: 4))
+                  : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
+              ),
+              child: ListTile(
+                leading: Icon(Icons.videogame_asset_rounded,
+                    color: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
+                        ? const Color(0xFF059669)
+                        : Colors.orange.shade500),
+                title: Row(
+                  children: [
+                    Text('Sân Chơi (Map)',
+                        style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w800,
+                          color: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
+                              ? const Color(0xFF059669)
+                              : Colors.orange.shade700,
+                        )),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF97316)]),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFFEF4444).withValues(alpha: 0.4), blurRadius: 4, offset: const Offset(0, 2))
+                        ],
+                      ),
+                      child: Text('HOT', style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+                    ),
+                  ],
+                ),
+                selected: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground',
+                selectedTileColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
                 onTap: () {
                   Navigator.pop(context);
-                  _navigate(context, i);
+                  final currentRoute = ModalRoute.of(context)?.settings.name;
+                  if (currentRoute != '/playground') {
+                    Navigator.pushNamedAndRemoveUntil(context, '/playground', (route) => false);
+                  }
                 },
               ),
+            ),
             FutureBuilder<Map<String, String>>(
               future: AuthManager.getUser(),
               builder: (context, snapshot) {
@@ -188,13 +259,16 @@ class AppScaffold extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
+        // currentIndex phải >= 0, dùng 0 làm fallback khi là -1 (màn hình phụ)
+        currentIndex: currentIndex < 0 ? 0 : currentIndex,
         onTap: (i) => _navigate(context, i),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF4F46E5),
+        // Khi currentIndex = -1, không highlight tab nào (dùng màu grey cho cả selected)
+        selectedItemColor: currentIndex < 0 ? Colors.grey : const Color(0xFF4F46E5),
         unselectedItemColor: Colors.grey,
-        selectedLabelStyle:
-            GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11),
+        selectedLabelStyle: currentIndex < 0
+            ? GoogleFonts.outfit(fontWeight: FontWeight.normal, fontSize: 11)
+            : GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11),
         unselectedLabelStyle: GoogleFonts.outfit(fontSize: 11),
         items: List.generate(
           _labels.length,
