@@ -6,8 +6,6 @@ class UserProgressManager {
   static const _keyStreak = 'kns_streak';
   static const _keyLastActive = 'kns_last_active'; // yyyy-MM-dd
   static const _keyBookmarkedNews = 'kns_bookmarked_news';
-  static const _keySavedTips = 'kns_saved_tips';
-  static const _keyLikedTips = 'kns_liked_tips';
   static const _keyCompletedSkills = 'kns_completed_skills';
   static const _keyGoal = 'kns_goal';
 
@@ -85,51 +83,6 @@ class UserProgressManager {
     await p.setStringList(_keyBookmarkedNews, ids);
   }
 
-  // ── Saved Tips (Mẹo vặt) ──────────────────────────────────────────────────
-  static Future<List<String>> getSavedTipIds() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getStringList(_keySavedTips) ?? [];
-  }
-
-  static Future<bool> isTipSaved(String id) async {
-    final ids = await getSavedTipIds();
-    return ids.contains(id);
-  }
-
-  static Future<void> toggleSaveTip(String id) async {
-    final p = await SharedPreferences.getInstance();
-    final ids = p.getStringList(_keySavedTips) ?? [];
-    if (ids.contains(id)) {
-      ids.remove(id);
-    } else {
-      ids.add(id);
-      await addXp(1); // +1 XP khi lưu mẹo
-    }
-    await p.setStringList(_keySavedTips, ids);
-  }
-
-  // ── Liked Tips ────────────────────────────────────────────────────────────
-  static Future<List<String>> getLikedTipIds() async {
-    final p = await SharedPreferences.getInstance();
-    return p.getStringList(_keyLikedTips) ?? [];
-  }
-
-  static Future<bool> isTipLiked(String id) async {
-    final ids = await getLikedTipIds();
-    return ids.contains(id);
-  }
-
-  static Future<void> toggleLikeTip(String id) async {
-    final p = await SharedPreferences.getInstance();
-    final ids = p.getStringList(_keyLikedTips) ?? [];
-    if (ids.contains(id)) {
-      ids.remove(id);
-    } else {
-      ids.add(id);
-      await addXp(1); // +1 XP
-    }
-    await p.setStringList(_keyLikedTips, ids);
-  }
 
   // ── Completed Skills ──────────────────────────────────────────────────────
   static Future<List<String>> getCompletedSkillIds() async {
@@ -168,13 +121,11 @@ class UserProgressManager {
     final xp = await getXp();
     final streak = await getStreak();
     final completed = await getCompletedSkillIds();
-    final saved = await getSavedTipIds();
     final bookmarks = await getBookmarkedNewsIds();
     return {
       'xp': xp,
       'streak': streak,
       'completedSkills': completed.length,
-      'savedTips': saved.length,
       'bookmarkedNews': bookmarks.length,
       'level': _levelFromXp(xp),
       'levelLabel': _levelLabel(xp),

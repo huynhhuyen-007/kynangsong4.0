@@ -128,70 +128,7 @@ def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
 
-# ── API Endpoints ─────────────────────────────────────────────────────────────
-@app.post("/api/auth/register", response_model=UserPublic)
-async def register(body: UserInRegister):
-    col = get_users_collection()
 
-    # Kiểm tra email đã tồn tại
-    existing = await col.find_one({"email": body.email})
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="Email này đã được đăng ký, vui lòng dùng email khác."
-        )
-
-    # Tạo document mới
-    new_user = {
-        "name": body.name,
-        "email": body.email,
-        "password_hash": hash_password(body.password),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "role": "user",
-    }
-
-    result = await col.insert_one(new_user)
-    user_id = str(result.inserted_id)
-
-    return UserPublic(id=user_id, name=body.name, email=body.email, role="user", avatar_url=None)
-
-
-@app.post("/api/auth/login", response_model=UserPublic)
-async def login(body: UserInLogin):
-    col = get_users_collection()
-
-    user = await col.find_one({"email": body.email})
-    if not user or not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=401,
-            detail="Email hoặc mật khẩu không đúng."
-        )
-
-    return UserPublic(
-        id=str(user["_id"]),
-        name=user["name"],
-        email=user["email"],
-        role=user.get("role", "user"),
-        avatar_url=user.get("avatar_url"),
-    )
-
-@app.post("/api/users/{user_id}/avatar")
-async def upload_avatar(user_id: str, file: UploadFile = File(...)):
-    col = get_users_collection()
-    user = await col.find_one({"_id": ObjectId(user_id)})
-    if not user:
-        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
-        
-    ext = file.filename.split(".")[-1]
-    filename = f"{user_id}_{int(datetime.now(timezone.utc).timestamp())}.{ext}"
-    filepath = f"static/avatars/{filename}"
-    
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    avatar_url = f"/static/avatars/{filename}"
-    await col.update_one({"_id": ObjectId(user_id)}, {"$set": {"avatar_url": avatar_url}})
-    return {"avatar_url": avatar_url}
 
 
 @app.get("/api/admin/users")
@@ -210,10 +147,34 @@ async def get_all_users(admin_id: str):
             "id": str(u["_id"]),
             "name": u.get("name"),
             "email": u.get("email"),
-            "role": u.get("role", "user")
+            "role": u.get("role", "user"),
+            "avatar_url": u.get("avatar_url"),
+            "created_at": u.get("created_at", ""),
         }
         for u in users
     ]
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(user_id: str, admin_id: str):
+    """Admin xóa tài khoản người dùng (không thể xóa chính mình hoặc admin khác)."""
+    await _check_admin(admin_id)
+    if user_id == admin_id:
+        raise HTTPException(status_code=400, detail="Không thể tự xóa tài khoản của mình.")
+    col = get_users_collection()
+    try:
+        target = await col.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="user_id không hợp lệ.")
+    if not target:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng.")
+    if target.get("role") == "admin":
+        raise HTTPException(status_code=403, detail="Không thể xóa tài khoản admin khác.")
+    await col.delete_one({"_id": ObjectId(user_id)})
+    # Xóa toàn bộ bài đăng và comment của user đó
+    await mongo_client[DB_NAME]["posts"].delete_many({"user_id": user_id})
+    await mongo_client[DB_NAME]["comments"].delete_many({"user_id": user_id})
+    return {"status": "deleted"}
 
 
 @app.post("/api/admin/set_role")
@@ -236,71 +197,7 @@ async def set_role(body: RoleUpdate):
         
     return {"status": "success"}
 
-# ── API Tin tức & Vui học ──────────────────────────────────────────────────────
 
-@app.get("/api/news")
-async def get_news(sort: str = "new"):
-    col = mongo_client[DB_NAME]["news"]
-    sort_field = "created_at"
-    cursor = col.find().sort(sort_field, -1)
-    news_items = await cursor.to_list(length=100)
-    result = [
-        {
-            "id": str(n["_id"]),
-            "title": n.get("title", ""),
-            "summary": n.get("summary", ""),
-            "content": n.get("content", ""),
-            "image_url": n.get("image_url", ""),
-            "created_at": n.get("created_at", ""),
-            "author": n.get("author", "Admin")
-        } for n in news_items
-    ]
-    if sort == "hot":
-        import random
-        random.shuffle(result)
-    return result
-
-@app.get("/api/skills")
-async def get_skills():
-    col = mongo_client[DB_NAME]["skills"]
-    cursor = col.find().sort("created_at", -1)
-    skills = await cursor.to_list(length=100)
-    return [
-        {
-            "id": str(s["_id"]),
-            "title": s.get("title", ""),
-            "category": s.get("category", ""),
-            "description": s.get("description", ""),
-            "image_url": s.get("image_url", ""),
-            "content": s.get("content", ""),
-            "duration_minutes": s.get("duration_minutes", 5)
-        } for s in skills
-    ]
-
-@app.get("/api/fun")
-async def get_fun():
-    col = mongo_client[DB_NAME]["fun"]
-    cursor = col.find().sort("created_at", -1)
-    fun_items = await cursor.to_list(length=100)
-    return [
-        {
-            "id": str(f["_id"]),
-            "title": f.get("title", ""),
-            "type": f.get("type", "video"),
-            "media_url": f.get("media_url", ""),
-            "content": f.get("content", ""),
-            "created_at": f.get("created_at", ""),
-        } for f in fun_items
-    ]
-
-@app.get("/api/health")
-async def health():
-    """Kiểm tra trạng thái server và MongoDB."""
-    try:
-        await mongo_client.admin.command("ping")
-        return {"status": "ok", "database": "MongoDB connected"}
-    except Exception as e:
-        return {"status": "error", "database": str(e)}
 
 
 # ── Community & CMS Pydantic Models ──────────────────────────────────────────
@@ -516,6 +413,113 @@ async def toggle_hide_post(post_id: str, admin_id: str):
     return {"is_hidden": new_hidden}
 
 
+# ── Admin Community — Comments ─────────────────────────────────────────────
+@app.get("/api/admin/community/comments")
+async def admin_get_all_comments(admin_id: str):
+    """Lấy toàn bộ comments (có thông tin bài viết) cho admin moderation."""
+    await _check_admin(admin_id)
+    col = mongo_client[DB_NAME]["comments"]
+    cursor = col.find().sort("created_at", -1)
+    comments = await cursor.to_list(length=1000)
+    return [
+        {
+            "id": str(c["_id"]),
+            "post_id": c.get("post_id", ""),
+            "user_id": c.get("user_id", ""),
+            "user_name": c.get("user_name", ""),
+            "content": c.get("content", ""),
+            "reported_by": c.get("reported_by", []),
+            "report_count": len(c.get("reported_by", [])),
+            "created_at": c.get("created_at", ""),
+        }
+        for c in comments
+    ]
+
+
+@app.delete("/api/admin/community/comments/{comment_id}")
+async def admin_delete_comment(comment_id: str, admin_id: str):
+    """Admin xóa một comment."""
+    await _check_admin(admin_id)
+    col = mongo_client[DB_NAME]["comments"]
+    try:
+        comment = await col.find_one({"_id": ObjectId(comment_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="comment_id không hợp lệ")
+    if not comment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bình luận")
+    await col.delete_one({"_id": ObjectId(comment_id)})
+    # Giảm comments_count của bài viết
+    post_id = comment.get("post_id")
+    if post_id:
+        await mongo_client[DB_NAME]["posts"].update_one(
+            {"_id": ObjectId(post_id)}, {"$inc": {"comments_count": -1}}
+        )
+    return {"status": "deleted"}
+
+
+# ── Admin Stats ───────────────────────────────────────────────────────────────
+@app.get("/api/admin/stats")
+async def get_admin_stats(admin_id: str):
+    """Trả về thống kê tổng quan hệ thống cho admin dashboard."""
+    await _check_admin(admin_id)
+    db = mongo_client[DB_NAME]
+
+    total_users   = await db.users.count_documents({})
+    total_skills  = await db.skills.count_documents({})
+    total_news    = await db.news.count_documents({})
+    total_posts   = await db.posts.count_documents({})
+    hidden_posts  = await db.posts.count_documents({"is_hidden": True})
+    # Bài có ít nhất 1 báo cáo
+    reported_posts = await db.posts.count_documents(
+        {"reported_by": {"$exists": True, "$not": {"$size": 0}}}
+    )
+
+    return {
+        "total_users":    total_users,
+        "total_skills":   total_skills,
+        "total_news":     total_news,
+        "total_posts":    total_posts,
+        "hidden_posts":   hidden_posts,
+        "reported_posts": reported_posts,
+    }
+
+
+# ── Admin Upload — Image ──────────────────────────────────────────────────────
+os.makedirs("static/skills", exist_ok=True)
+
+@app.post("/api/admin/upload/image")
+async def admin_upload_image(admin_id: str, file: UploadFile = File(...)):
+    """Upload media (ảnh/video) cho kỹ năng/tin tức. Giới hạn 50MB."""
+    await _check_admin(admin_id)
+    MAX_SIZE = 50 * 1024 * 1024 # 50MB
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File quá lớn, tối đa 50MB.")
+    allowed_ext = {"jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "avi"}
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=415, detail="Định dạng không hợp lệ. Dùng: jpg, png, webp, mp4, mov, avi.")
+    filename = f"skill_{int(datetime.now(timezone.utc).timestamp())}_{admin_id[:8]}.{ext}"
+    filepath = f"static/skills/{filename}"
+    with open(filepath, "wb") as buffer:
+        buffer.write(content)
+    return {"image_url": f"/static/skills/{filename}"}
+
+
+# ── Admin Skills — Categories ─────────────────────────────────────────────────
+@app.get("/api/admin/skills/categories")
+async def admin_get_skill_categories(admin_id: str):
+    """Trả về danh sách các danh mục kỹ năng có trong hệ thống."""
+    await _check_admin(admin_id)
+    col = mongo_client[DB_NAME]["skills"]
+    categories = await col.distinct("category")
+    result = []
+    for cat in sorted(categories):
+        count = await col.count_documents({"category": cat})
+        result.append({"name": cat, "count": count})
+    return result
+
+
 # ── Admin CMS — Skills ────────────────────────────────────────────────────────
 @app.post("/api/admin/skills")
 async def create_skill(body: SkillUpsert):
@@ -528,6 +532,7 @@ async def create_skill(body: SkillUpsert):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     result = await col.insert_one(doc)
+    doc.pop("_id", None)
     return {"id": str(result.inserted_id), **doc}
 
 @app.put("/api/admin/skills/{skill_id}")
@@ -561,6 +566,7 @@ async def create_news(body: NewsUpsert):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     result = await col.insert_one(doc)
+    doc.pop("_id", None)
     return {"id": str(result.inserted_id), **doc}
 
 @app.put("/api/admin/news/{news_id}")
@@ -593,6 +599,7 @@ async def create_fun(body: FunUpsert):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     result = await col.insert_one(doc)
+    doc.pop("_id", None)
     return {"id": str(result.inserted_id), **doc}
 
 @app.put("/api/admin/fun/{fun_id}")
@@ -624,7 +631,8 @@ async def ai_chat(body: ChatRequest):
     prompt = f"""
 Bạn là AI Life Skill Copilot - Trợ lý kỹ năng sống thông minh dành cho sinh viên Việt Nam.
 Yêu cầu:
-- Trả lời ngắn gọn, rõ ràng, thực tiễn.
+- NẾU câu hỏi KHÔNG LIÊN QUAN đến kỹ năng sống, học tập, môi trường làm việc hay tâm lý, BẮT BUỘC trả lời đúng 1 câu: "Tôi chỉ hỗ trợ các nội dung học tập có trong ứng dụng." (Closed-domain RAG). Không giải thích thêm.
+- Nếu liên quan, trả lời ngắn gọn, rõ ràng, thực tiễn.
 - Luôn phải Format bằng Markdown chính xác theo cấu trúc sau (không thay đổi Icon):
 ✅ **Tình huống:** [Phân tích ngắn 1 dòng]
 ⚠️ **Điều cần tránh:** [Lưu ý những sai lầm]
@@ -1078,8 +1086,8 @@ async def ai_context_chat(body: ContextChatRequest):
     prompt = f"""Bạn là AI Life Skill Copilot "Owl" - Trợ lý kỹ năng sống thông minh dành cho sinh viên Việt Nam.
 {context_block}
 Yêu cầu trả lời:
-- Ngắn gọn, rõ ràng, thực tiễn (không quá 200 từ).
-- Cá nhân hóa nếu có dữ liệu học viên.
+- NẾU câu hỏi KHÔNG LIÊN QUAN đến kỹ năng sống, tâm lý, học tập, BẮT BUỘC trả lời đúng 1 câu: "Tôi chỉ hỗ trợ các nội dung học tập có trong ứng dụng." (Closed-domain RAG).
+- Nếu liên quan: Ngắn gọn, rõ ràng, thực tiễn (không quá 200 từ) và Cá nhân hóa theo dữ liệu học viên.
 - Format Markdown chính xác:
 ✅ **Tình huống:** [Phân tích ngắn 1 dòng]
 ⚠️ **Điều cần tránh:** [Lưu ý những sai lầm]
@@ -1135,3 +1143,84 @@ Câu hỏi: {body.query}"""
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ── PHASE 4: SKILL PAGE LEARNING FLOW (SCORM & RAG) ─────────────────────────
+
+class ProgressUpdate(BaseModel):
+    user_id: str
+    lesson_id: str
+    progress: float  # 10% -> 10.0, 50% -> 50.0, 100% -> 100.0
+    status: str      # "in_progress", "completed"
+    score: Optional[int] = 0
+    time_spent: Optional[int] = 0
+
+
+
+class QuizSubmit(BaseModel):
+    user_id: str
+    lesson_id: str
+    answers: list[dict]
+    
+
+@app.get("/api/ai/recommendation/{user_id}")
+async def get_ai_recommendation(user_id: str):
+    """Explainable AI Recommendation"""
+    try:
+        # Load progress đã hoàn thành
+        prog_col = mongo_client[DB_NAME]["learning_progress"]
+        cursor = prog_col.find({"user_id": user_id, "status": "completed"})
+        completed_lessons = await cursor.to_list(length=100)
+        
+        lesson_ids = [ls["lesson_id"] for ls in completed_lessons]
+        
+        history_text = "Kỹ năng cần ôn: "
+        if lesson_ids:
+            # Lấy title từ lesson
+            less_col = mongo_client[DB_NAME]["lessons"]
+            # Convert str ids to ObjectIds
+            obj_ids = []
+            for lid in lesson_ids:
+                try:
+                    obj_ids.append(ObjectId(lid))
+                except:
+                    pass
+            cursor_lessons = less_col.find({"_id": {"$in": obj_ids}})
+            lessons_info = await cursor_lessons.to_list(length=100)
+            learned_titles = [l.get("title", "") for l in lessons_info]
+            if learned_titles:
+                history_text = "Học viên này vừa hoàn thành chuỗi bài: " + ", ".join(learned_titles)
+            else:
+                history_text = "Học viên này có tương tác nhưng chưa lưu vết tên kỹ năng rõ ràng."
+        else:
+            history_text = "Học viên này là người mới, chưa hoàn thành kỹ năng nào."
+            
+        prompt = f"""
+Bạn là một Mentor AI tên Owl của ứng dụng Kỹ Năng Sống 4.0.
+Nhiệm vụ của bạn là đưa ra Gợi ý bài học cá nhân hóa cho học viên (Explainable AI Recommendation).
+Lịch sử người dùng: {history_text}
+
+Hãy đưa ra 1 kỹ năng hoặc bài học quan trọng nhất người dùng nên học trong ứng dụng Kỹ Năng Sống tiếp theo.
+Giải thích logic theo mô hình "Explainable AI" dựa trên những gì họ đã học (hoặc chưa học). Ví dụ: Đã học giao tiếp cơ bản thì gợi ý Giao tiếp đám đông.
+Lưu ý:
+- Trình bày dạng Markdown với 2 dòng duy nhất, có Icon y hệt như sau:
+🎯 **Đề Xuất**: [Tên Kỹ năng]
+💡 **Lý do**: [Giải thích thuyết phục 1 dòng tại sao đề xuất kỹ năng này dựa vào dữ liệu trên]
+"""
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        response = await model.generate_content_async(prompt)
+        advice = response.text.strip()
+        return {"recommendation_text": advice}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── REGISTER EXTRACTED ROUTERS ──────────────────────────────────────────────
+from routers.auth_router import router as auth_router
+from routers.news_router import router as news_router
+from routers.lesson_router import router as lesson_router
+
+app.include_router(auth_router)
+app.include_router(news_router)
+app.include_router(lesson_router)

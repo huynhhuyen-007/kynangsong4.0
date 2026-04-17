@@ -134,13 +134,78 @@ async def seed():
     await db["fun"].delete_many({})
     await db["skills"].delete_many({})
     await db["posts"].delete_many({})
+    await db["lessons"].delete_many({})
+    await db["lesson_quizzes"].delete_many({})
+    await db["learning_progress"].delete_many({})
+    await db["quiz_results"].delete_many({})
     
     # Thêm dữ liệu mới
     await db["news"].insert_many(news_data)
     await db["fun"].insert_many(fun_data)
-    await db["skills"].insert_many(skills_data)
+    
+    skills_result = await db["skills"].insert_many(skills_data)
+    skill_ids = skills_result.inserted_ids
+    
     await db["posts"].insert_many(posts_data)
-    print("✅ Đã bơm Mock Data thành công cho Trang Tin Tức, Vui học, Kỹ năng và Cộng đồng!")
+    
+    # --- Tạo LESSONS (Video Youtube) và QUIZZES ---
+    # Dummy youtube video ID for demo
+    demo_video_id = "yP1z9FioTjM"
+    
+    for i, s_id in enumerate(skill_ids):
+        # Mỗi skill tạo 2 bài học
+        lessons_data = [
+            {
+                "skill_id": str(s_id),
+                "title": f"Bài 1: Giới thiệu chung",
+                "type": "mp4", # video player youtube handling
+                "content_url": demo_video_id,
+                "duration": 5,
+                "order": 1
+            },
+            {
+                "skill_id": str(s_id),
+                "title": f"Bài 2: Thực hành & Áp dụng",
+                "type": "mp4",
+                "content_url": demo_video_id,
+                "duration": 10,
+                "order": 2
+            }
+        ]
+        
+        lessons_result = await db["lessons"].insert_many(lessons_data)
+        
+        # Mỗi bài học tạo 2 câu hỏi test quiz
+        for l_id in lessons_result.inserted_ids:
+            quizzes_data = [
+                {
+                    "lesson_id": str(l_id),
+                    "content": "Sau khi học xong bài này, điều quan trọng nhất cần ghi nhớ là gì?",
+                    "options": [
+                        "A. Bỏ qua thực hành",
+                        "B. Ghi nhớ các bước xử lý cơ bản",
+                        "C. Nhờ người khác làm hộ",
+                        "D. Không cần thiết phải làm gì"
+                    ],
+                    "correct_answer": 1,
+                    "explanation": "Việc ghi nhớ các bước xử lý sẽ giúp bạn phản xạ nhanh trong tình huống thực tế."
+                },
+                {
+                    "lesson_id": str(l_id),
+                    "content": "Sai lầm phổ biến mà người mới thường gặp phải?",
+                    "options": [
+                        "A. Cẩn thận ghi chép",
+                        "B. Tham lam bỏ bước",
+                        "C. Thực hành đầy đủ",
+                        "D. Lắng nghe mentor"
+                    ],
+                    "correct_answer": 1,
+                    "explanation": "Hãy bắt đầu từ từ, tập trung vào từng bước để đạt hiệu quả cao nhất."
+                }
+            ]
+            await db["lesson_quizzes"].insert_many(quizzes_data)
+            
+    print("✅ Đã bơm Mock Data (kèm Lessons & Quizzes) thành công!")
     client.close()
 
 if __name__ == "__main__":

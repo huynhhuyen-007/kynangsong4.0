@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../utils/api_service.dart';
+import '../utils/auth_manager.dart';
 import '../utils/user_progress_manager.dart';
 import '../widgets/app_scaffold.dart';
 import 'skill_detail_screen.dart';
@@ -19,17 +21,36 @@ class _SkillsScreenState extends State<SkillsScreen> {
   String _selectedCategory = 'Tất cả';
   List<String> _categories = ['Tất cả'];
   Set<String> _completedIds = {};
+  
+  String? _aiRecommendation;
+  bool _loadingAi = true;
 
   @override
   void initState() {
     super.initState();
     _loadSkills();
     _loadCompleted();
+    _loadAiRecommendation();
   }
 
   Future<void> _loadCompleted() async {
     final ids = await UserProgressManager.getCompletedSkillIds();
     if (mounted) setState(() => _completedIds = Set.from(ids));
+  }
+
+  Future<void> _loadAiRecommendation() async {
+     final user = await AuthManager.getUser();
+     final userId = user['id'];
+     if (userId == null || userId.isEmpty) {
+       if (mounted) setState(() => _loadingAi = false);
+       return;
+     }
+     try {
+        final res = await ApiService.getAiRecommendation(userId);
+        if (mounted) setState(() { _aiRecommendation = res['recommendation_text']; _loadingAi = false; });
+     } catch (e) {
+        if (mounted) setState(() => _loadingAi = false);
+     }
   }
 
   Future<void> _loadSkills() async {
@@ -82,6 +103,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
           : Column(
               children: [
                 _buildProgressHeader(),
+                _buildAiRecommendation(),
                 _buildCategoryFilter(),
                 Expanded(child: _buildList()),
               ],
@@ -130,6 +152,47 @@ class _SkillsScreenState extends State<SkillsScreen> {
         ),
       ]),
     );
+  }
+
+  Widget _buildAiRecommendation() {
+     if (_loadingAi) {
+         return const Padding(
+           padding: EdgeInsets.symmetric(vertical: 20),
+           child: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
+         );
+     }
+     if (_aiRecommendation == null) return const SizedBox();
+
+     return Container(
+        margin: const EdgeInsets.only(left: 16, right: 16, top: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+           color: const Color(0xFFFFF7ED),
+           borderRadius: BorderRadius.circular(16),
+           border: Border.all(color: const Color(0xFFFBBF24).withOpacity(0.5)),
+           boxShadow: [BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+              Row(
+                 children: [
+                    const Text('🦉', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Text('AI Mentor Owl gợi ý lộ trình', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFFD97706))),
+                 ],
+              ),
+              const SizedBox(height: 8),
+              MarkdownBody(
+                 data: _aiRecommendation!,
+                 styleSheet: MarkdownStyleSheet(
+                    p: GoogleFonts.outfit(fontSize: 13, color: Colors.grey.shade800, height: 1.5),
+                    strong: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: const Color(0xFF1E1B4B)),
+                 ),
+              )
+           ]
+        ),
+     );
   }
 
   Widget _buildCategoryFilter() {

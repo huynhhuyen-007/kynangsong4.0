@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../utils/auth_manager.dart';
+import '../utils/app_provider.dart';
+import '../utils/app_localizations.dart';
 
 class AppScaffold extends StatelessWidget {
   final String title;
@@ -16,13 +19,15 @@ class AppScaffold extends StatelessWidget {
     this.floatingActionButton,
   });
 
-  static const _routes = ['/home', '/community', '/skills', '/fun', '/news'];
-  static const _labels = ['Trang chủ', 'Cộng đồng', 'Kỹ năng', 'Vui học', 'Tin tức'];
+  static const _routes = ['/home', '/community', '/skills', '/news'];
+
+  List<String> _labels(AppLocalizations loc) =>
+      [loc.home, loc.community, loc.skillsNav, loc.newsNav];
+
   static const _icons = [
     Icons.home_outlined,
     Icons.people_outline_rounded,
     Icons.star_outline,
-    Icons.lightbulb_outline,
     Icons.newspaper_outlined,
   ];
 
@@ -39,8 +44,16 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appProvider = context.watch<AppProvider>();
+    final loc = AppLocalizations.of(context);
+    final isDark = appProvider.isDark;
     final currentRoute = ModalRoute.of(context)?.settings.name;
-    final bool isPushedSubScreen = currentRoute == '/profile' || currentRoute == '/copilot' || currentRoute == '/news_detail' || currentRoute == '/post_detail';
+    final bool isPushedSubScreen = currentRoute == '/profile' ||
+        currentRoute == '/copilot' ||
+        currentRoute == '/news_detail' ||
+        currentRoute == '/post_detail';
+
+    final labels = _labels(loc);
 
     return Scaffold(
       appBar: AppBar(
@@ -63,25 +76,39 @@ class AppScaffold extends StatelessWidget {
                       fontSize: 14)),
             ),
             const SizedBox(width: 10),
-            Text(title),
+            Expanded(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
+          // Dark/Light toggle button in AppBar
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
+            tooltip: isDark ? loc.lightMode : loc.darkMode,
+            onPressed: () => appProvider.toggleTheme(),
+          ),
           IconButton(
             icon: const Icon(Icons.person_outline),
-            tooltip: 'Hồ sơ',
+            tooltip: loc.profile,
             onPressed: () => Navigator.pushNamed(context, '/profile'),
           ),
         ],
       ),
+
+      // ── Drawer ─────────────────────────────────────────────────────────────
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
+            // Header
             DrawerHeader(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1E1B4B), Color(0xFF4F46E5)], // Darker sci-fi gradient
+                  colors: [Color(0xFF1E1B4B), Color(0xFF4F46E5)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -93,15 +120,20 @@ class AppScaffold extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF3B82F6)]),
+                        gradient: const LinearGradient(
+                            colors: [Color(0xFF8B5CF6), Color(0xFF3B82F6)]),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
-                          BoxShadow(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))
+                          BoxShadow(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4))
                         ]),
-                    child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 28),
+                    child: const Icon(Icons.rocket_launch_rounded,
+                        color: Colors.white, size: 28),
                   ),
                   const SizedBox(height: 12),
-                  Text('Kỹ Năng Sống 4.0',
+                  Text(loc.appName,
                       style: GoogleFonts.outfit(
                           color: Colors.white,
                           fontSize: 20,
@@ -109,161 +141,191 @@ class AppScaffold extends StatelessWidget {
                           letterSpacing: 0.5)),
                   Text('Skill Up Your Life ✦',
                       style: GoogleFonts.outfit(
-                          color: const Color(0xFFA78BFA), fontSize: 13, fontWeight: FontWeight.w600)),
+                          color: const Color(0xFFA78BFA),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-            for (int i = 0; i < _labels.length; i++)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  gradient: i == currentIndex 
-                    ? LinearGradient(colors: [const Color(0xFF4F46E5).withValues(alpha: 0.15), Colors.transparent])
-                    : null,
-                  borderRadius: BorderRadius.circular(12),
-                  border: i == currentIndex
-                    ? const Border(left: BorderSide(color: Color(0xFF4F46E5), width: 4))
-                    : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
-                ),
-                child: ListTile(
-                  leading: Icon(_icons[i],
-                      color: i == currentIndex
-                          ? const Color(0xFF4F46E5)
-                          : Colors.grey.shade600),
-                  title: Text(_labels[i],
-                      style: GoogleFonts.outfit(
-                        fontWeight: i == currentIndex
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: i == currentIndex
-                            ? const Color(0xFF4F46E5)
-                            : Colors.grey.shade800,
-                      )),
-                  selected: i == currentIndex,
-                  selectedTileColor: Colors.transparent, // Nền đã dùng ở Container
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _navigate(context, i);
-                  },
-                ),
-              ),
-            const Divider(),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                gradient: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
-                  ? LinearGradient(colors: [const Color(0xFF059669).withValues(alpha: 0.15), Colors.transparent])
-                  : null,
-                borderRadius: BorderRadius.circular(12),
-                border: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
-                  ? const Border(left: BorderSide(color: Color(0xFF059669), width: 4))
-                  : const Border(left: BorderSide(color: Colors.transparent, width: 4)),
-              ),
-              child: ListTile(
-                leading: Icon(Icons.videogame_asset_rounded,
-                    color: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
-                        ? const Color(0xFF059669)
-                        : Colors.orange.shade500),
-                title: Row(
-                  children: [
-                    Text('Sân Chơi (Map)',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w800,
-                          color: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground'
-                              ? const Color(0xFF059669)
-                              : Colors.orange.shade700,
-                        )),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF97316)]),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(color: const Color(0xFFEF4444).withValues(alpha: 0.4), blurRadius: 4, offset: const Offset(0, 2))
-                        ],
-                      ),
-                      child: Text('HOT', style: GoogleFonts.outfit(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
-                    ),
-                  ],
-                ),
-                selected: currentIndex == -1 && ModalRoute.of(context)?.settings.name == '/playground',
-                selectedTileColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+
+            // Nav items
+            for (int i = 0; i < labels.length; i++)
+              _DrawerNavItem(
+                icon: _icons[i],
+                label: labels[i],
+                isSelected: i == currentIndex,
                 onTap: () {
                   Navigator.pop(context);
-                  final currentRoute = ModalRoute.of(context)?.settings.name;
-                  if (currentRoute != '/playground') {
-                    Navigator.pushNamedAndRemoveUntil(context, '/playground', (route) => false);
-                  }
+                  _navigate(context, i);
                 },
               ),
+
+            const Divider(height: 1),
+
+            // Playground
+            _DrawerNavItem(
+              icon: Icons.videogame_asset_rounded,
+              label: loc.playground,
+              isSelected: currentIndex == -1 && currentRoute == '/playground',
+              selectedColor: const Color(0xFF059669),
+              badge: 'HOT',
+              onTap: () {
+                Navigator.pop(context);
+                if (currentRoute != '/playground') {
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, '/playground', (route) => false);
+                }
+              },
             ),
+
+            // Admin section
             FutureBuilder<Map<String, String>>(
               future: AuthManager.getUser(),
               builder: (context, snapshot) {
                 if (snapshot.hasData && snapshot.data!['role'] == 'admin') {
-                  return Column(
-                    children: [
-                      const Divider(),
-                      ListTile(
-                        leading: const Icon(Icons.admin_panel_settings, color: Colors.orange),
-                        title: Text('Quản lý người dùng',
+                  return Column(children: [
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                      child: Row(children: [
+                        const Icon(Icons.admin_panel_settings_rounded,
+                            size: 14, color: Colors.orange),
+                        const SizedBox(width: 6),
+                        Text(loc.isEn ? 'ADMIN ZONE' : 'QUẢN TRỊ',
                             style: GoogleFonts.outfit(
-                                color: Colors.orange, fontWeight: FontWeight.w600)),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(context, '/admin');
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.edit_note_rounded, color: Colors.deepOrange),
-                        title: Text('Quản lý nội dung',
-                            style: GoogleFonts.outfit(
-                                color: Colors.deepOrange, fontWeight: FontWeight.w600)),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(context, '/admin_cms');
-                        },
-                      ),
-                    ],
-                  );
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.orange.shade700,
+                                letterSpacing: 1.2)),
+                      ]),
+                    ),
+                    _DrawerNavItem(
+                      icon: Icons.dashboard_rounded,
+                      label: loc.adminDashboard,
+                      isSelected: currentRoute == '/admin',
+                      selectedColor: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/admin');
+                      },
+                    ),
+                    _DrawerNavItem(
+                      icon: Icons.edit_note_rounded,
+                      label: loc.adminContent,
+                      isSelected: currentRoute == '/admin_cms',
+                      selectedColor: Colors.deepOrange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/admin_cms');
+                      },
+                    ),
+                  ]);
                 }
                 return const SizedBox.shrink();
               },
             ),
-            const Divider(),
-            ListTile(
-              leading: Icon(Icons.person_outline, color: const Color(0xFF4F46E5)),
-              title: Text('Hồ sơ của tôi',
+
+            const Divider(height: 1),
+
+            // Settings section
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Text(loc.isEn ? 'SETTINGS' : 'CÀI ĐẶT',
                   style: GoogleFonts.outfit(
-                      color: const Color(0xFF4F46E5),
-                      fontWeight: FontWeight.w600)),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.grey.shade500,
+                      letterSpacing: 1.2)),
+            ),
+
+            // Dark/Light Mode Toggle
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: ListTile(
+                leading: Icon(
+                    isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                    color: isDark ? Colors.amber : const Color(0xFF4F46E5)),
+                title: Text(isDark ? loc.lightMode : loc.darkMode,
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                trailing: Switch.adaptive(
+                  value: isDark,
+                  activeThumbColor: const Color(0xFF4F46E5),
+                  onChanged: (_) => appProvider.toggleTheme(),
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => appProvider.toggleTheme(),
+              ),
+            ),
+
+            // Language Toggle
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: ListTile(
+                leading: Text(
+                    appProvider.locale == 'vi' ? '🇻🇳' : '🇬🇧',
+                    style: const TextStyle(fontSize: 22)),
+                title: Text(loc.language,
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                trailing: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _LangButton(
+                        label: 'VI',
+                        isActive: appProvider.locale == 'vi',
+                        onTap: () => appProvider.setLocale('vi'),
+                      ),
+                      _LangButton(
+                        label: 'EN',
+                        isActive: appProvider.locale == 'en',
+                        onTap: () => appProvider.setLocale('en'),
+                      ),
+                    ],
+                  ),
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => appProvider.toggleLocale(),
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            // Profile & Logout
+            _DrawerNavItem(
+              icon: Icons.person_outline,
+              label: loc.profile,
+              isSelected: false,
+              selectedColor: const Color(0xFF4F46E5),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/profile');
               },
             ),
-            ListTile(
-              leading: Icon(Icons.logout, color: Colors.red.shade400),
-              title: Text('Đăng xuất',
-                  style: GoogleFonts.outfit(
-                      color: Colors.red.shade400,
-                      fontWeight: FontWeight.w600)),
-              onTap: () => _logout(context),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: ListTile(
+                leading: Icon(Icons.logout, color: Colors.red.shade400),
+                title: Text(loc.logout,
+                    style: GoogleFonts.outfit(
+                        color: Colors.red.shade400, fontWeight: FontWeight.w600)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => _logout(context),
+              ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
+
+      // ── Bottom Nav ──────────────────────────────────────────────────────────
       bottomNavigationBar: BottomNavigationBar(
-        // currentIndex phải >= 0, dùng 0 làm fallback khi là -1 (màn hình phụ)
         currentIndex: currentIndex < 0 ? 0 : currentIndex,
         onTap: (i) => _navigate(context, i),
         type: BottomNavigationBarType.fixed,
-        // Khi currentIndex = -1, không highlight tab nào (dùng màu grey cho cả selected)
         selectedItemColor: currentIndex < 0 ? Colors.grey : const Color(0xFF4F46E5),
         unselectedItemColor: Colors.grey,
         selectedLabelStyle: currentIndex < 0
@@ -271,13 +333,105 @@ class AppScaffold extends StatelessWidget {
             : GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 11),
         unselectedLabelStyle: GoogleFonts.outfit(fontSize: 11),
         items: List.generate(
-          _labels.length,
-          (i) => BottomNavigationBarItem(
-              icon: Icon(_icons[i]), label: _labels[i]),
+          labels.length,
+          (i) => BottomNavigationBarItem(icon: Icon(_icons[i]), label: labels[i]),
         ),
       ),
+
       body: body,
       floatingActionButton: floatingActionButton,
+    );
+  }
+}
+
+// ── Drawer Nav Item ─────────────────────────────────────────────────────────
+class _DrawerNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final Color selectedColor;
+  final String? badge;
+  final VoidCallback onTap;
+
+  const _DrawerNavItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    this.selectedColor = const Color(0xFF4F46E5),
+    this.badge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        gradient: isSelected
+            ? LinearGradient(colors: [selectedColor.withValues(alpha: 0.12), Colors.transparent])
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: isSelected ? selectedColor : Colors.transparent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: isSelected ? selectedColor : Colors.grey.shade600),
+        title: Row(children: [
+          Text(label,
+              style: GoogleFonts.outfit(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? selectedColor : Colors.grey.shade800,
+              )),
+          if (badge != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF97316)]),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(badge!,
+                  style: GoogleFonts.outfit(
+                      color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ]),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ── Language Button ──────────────────────────────────────────────────────────
+class _LangButton extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _LangButton({required this.label, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF4F46E5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label,
+            style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: isActive ? Colors.white : Colors.grey.shade600)),
+      ),
     );
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/user_progress_manager.dart';
+import '../utils/api_service.dart';
+import '../utils/auth_manager.dart';
+import 'lesson_player_screen.dart';
 
 class SkillDetailScreen extends StatefulWidget {
   final Map<String, dynamic> skillItem;
@@ -14,13 +17,31 @@ class SkillDetailScreen extends StatefulWidget {
 class _SkillDetailScreenState extends State<SkillDetailScreen> {
   bool _isCompleted = false;
   bool _checkingComplete = true;
+  List<dynamic> _lessons = [];
+  bool _loadingLessons = true;
+  String _userId = '';
 
   @override
   void initState() {
     super.initState();
     _checkCompleted();
+    _loadUserAndLessons();
     // Give +2 XP for opening a skill
     UserProgressManager.addXp(2);
+  }
+
+  Future<void> _loadUserAndLessons() async {
+    final user = await AuthManager.getUser();
+    if (user != null && mounted) {
+      _userId = user['id'] ?? '';
+    }
+    
+    try {
+       final lessons = await ApiService.getLessons(widget.skillItem['id'].toString());
+       if (mounted) setState(() { _lessons = lessons; _loadingLessons = false; });
+    } catch (e) {
+       if (mounted) setState(() => _loadingLessons = false);
+    }
   }
 
   Future<void> _checkCompleted() async {
@@ -58,6 +79,55 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildLessonCard(Map<String, dynamic> ls) {
+    return GestureDetector(
+      onTap: () {
+         if (_userId.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để học')));
+            return;
+         }
+         Navigator.push(context, MaterialPageRoute(builder: (_) => LessonPlayerScreen(lessonItem: ls, userId: _userId))); 
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(color: Color(0xFFEEF2FF), shape: BoxShape.circle),
+              child: const Icon(Icons.play_arrow_rounded, color: Color(0xFF4F46E5)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(ls['title'] ?? 'Bài học', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B))),
+                  const SizedBox(height: 4),
+                  Text('Video SCORM Simulator • ${ls['duration']} phút', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+                ]
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey)
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -149,25 +219,27 @@ class _SkillDetailScreenState extends State<SkillDetailScreen> {
                     ]),
                   ),
                   const SizedBox(height: 24),
-                  Text('📖 Nội dung bài học',
-                    style: GoogleFonts.outfit(fontSize: 19, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B))),
-                  const SizedBox(height: 12),
-                  // Content paragraphs
-                  ...(skill['content'] ?? '').toString().split('\n').where((l) => l.trim().isNotEmpty).map((line) =>
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Container(
-                          margin: const EdgeInsets.only(top: 6),
-                          width: 6, height: 6,
-                          decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(line.trim(),
-                          style: GoogleFonts.outfit(fontSize: 15, height: 1.6, color: Colors.grey.shade800))),
-                      ]),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('📚 Danh sách bài học',
+                        style: GoogleFonts.outfit(fontSize: 19, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B))),
+                      if (_loadingLessons) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ],
                   ),
+                  const SizedBox(height: 12),
+                  if (!_loadingLessons) ...[
+                    if (_lessons.isEmpty && (skill['content'] == null || !skill['content'].toString().trim().startsWith('http')))
+                      Text('Chưa có bài học nào.', style: GoogleFonts.outfit(color: Colors.grey)),
+                    if (_lessons.isEmpty && skill['content'] != null && skill['content'].toString().trim().startsWith('http'))
+                      _buildLessonCard({
+                        'id': skill['id'],
+                        'title': 'Bài giảng chính (Video)',
+                        'content_url': skill['content'].toString().trim(),
+                        'duration': skill['duration_minutes'] ?? 30,
+                      }),
+                    if (_lessons.isNotEmpty) ..._lessons.map((ls) => _buildLessonCard(ls)),
+                  ],
 
                   // Related
                   const SizedBox(height: 24),

@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _baseUrl = 'http://10.0.2.2:8000';
+  static const String _baseUrl = 'http://192.168.8.200:8000';
+  static String get baseUrl => _baseUrl;
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login(String email, String password) async {
@@ -48,11 +49,6 @@ class ApiService {
     throw ApiException('Lỗi tải danh sách tin tức');
   }
 
-  static Future<List<dynamic>> getFun() async {
-    final response = await http.get(Uri.parse('$_baseUrl/api/fun'));
-    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as List;
-    throw ApiException('Lỗi tải danh sách vui học');
-  }
 
   // ── Admin Users ───────────────────────────────────────────────────────────
   static Future<List<dynamic>> getAllUsers(String adminId) async {
@@ -62,6 +58,12 @@ class ApiService {
     throw ApiException(body['detail'] ?? 'Lỗi tải danh sách người dùng');
   }
 
+  static Future<Map<String, dynamic>> getAdminStats(String adminId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/admin/stats?admin_id=$adminId'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    throw ApiException('Lỗi tải thống kê hệ thống');
+  }
+
   static Future<void> setRole(String adminId, String targetEmail, String newRole) async {
     final response = await http.post(Uri.parse('$_baseUrl/api/admin/set_role'),
         headers: {'Content-Type': 'application/json'},
@@ -69,6 +71,15 @@ class ApiService {
     if (response.statusCode != 200) {
       final body = jsonDecode(utf8.decode(response.bodyBytes));
       throw ApiException(body['detail'] ?? 'Lỗi cập nhật quyền');
+    }
+  }
+
+  static Future<void> deleteUser(String adminId, String userId) async {
+    final response = await http.delete(
+        Uri.parse('$_baseUrl/api/admin/users/$userId?admin_id=$adminId'));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      throw ApiException(body['detail'] ?? 'Lỗi xóa tài khoản');
     }
   }
 
@@ -168,6 +179,43 @@ class ApiService {
     }
   }
 
+  static Future<List<dynamic>> adminGetComments(String adminId) async {
+    final response = await http.get(
+        Uri.parse('$_baseUrl/api/admin/community/comments?admin_id=$adminId'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    throw ApiException('Lỗi tải danh sách bình luận');
+  }
+
+  static Future<void> adminDeleteComment(String commentId, String adminId) async {
+    final response = await http.delete(
+        Uri.parse('$_baseUrl/api/admin/community/comments/$commentId?admin_id=$adminId'));
+    if (response.statusCode != 200) {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      throw ApiException(body['detail'] ?? 'Lỗi xóa bình luận');
+    }
+  }
+
+  static Future<String> uploadSkillImage(String adminId, String filePath) async {
+    final request = http.MultipartRequest(
+        'POST', Uri.parse('$_baseUrl/api/admin/upload/image?admin_id=$adminId'));
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final response = await request.send();
+    final respStr = await response.stream.bytesToString();
+    if (response.statusCode == 200) {
+      final body = jsonDecode(respStr);
+      return body['image_url'] as String;
+    }
+    final err = jsonDecode(respStr);
+    throw ApiException(err['detail'] ?? 'Lỗi upload ảnh');
+  }
+
+  static Future<List<dynamic>> getSkillCategories(String adminId) async {
+    final response = await http.get(
+        Uri.parse('$_baseUrl/api/admin/skills/categories?admin_id=$adminId'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    throw ApiException('Lỗi tải danh mục');
+  }
+
   // ── Admin CMS — Skills ────────────────────────────────────────────────────
   static Future<void> createSkill({required String adminId, required String title,
       required String category, required String description, required String imageUrl,
@@ -230,35 +278,6 @@ class ApiService {
     if (response.statusCode != 200) throw ApiException('Lỗi xóa tin tức');
   }
 
-  // ── Admin CMS — Fun ───────────────────────────────────────────────────────
-  static Future<void> createFun({required String adminId, required String title,
-      required String type, required String mediaUrl, required String content}) async {
-    final response = await http.post(Uri.parse('$_baseUrl/api/admin/fun'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'admin_id': adminId, 'title': title, 'type': type,
-            'media_url': mediaUrl, 'content': content}));
-    if (response.statusCode != 200) {
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      throw ApiException(body['detail'] ?? 'Lỗi tạo nội dung');
-    }
-  }
-
-  static Future<void> updateFun(String id, {required String adminId, required String title,
-      required String type, required String mediaUrl, required String content}) async {
-    final response = await http.put(Uri.parse('$_baseUrl/api/admin/fun/$id'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'admin_id': adminId, 'title': title, 'type': type,
-            'media_url': mediaUrl, 'content': content}));
-    if (response.statusCode != 200) {
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      throw ApiException(body['detail'] ?? 'Lỗi cập nhật nội dung');
-    }
-  }
-
-  static Future<void> deleteFun(String id, String adminId) async {
-    final response = await http.delete(Uri.parse('$_baseUrl/api/admin/fun/$id?admin_id=$adminId'));
-    if (response.statusCode != 200) throw ApiException('Lỗi xóa nội dung');
-  }
 
   // ── AI Copilot ────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> askAi(String query, String userId) async {
@@ -345,6 +364,67 @@ class ApiService {
     final body = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200) return body as Map<String, dynamic>;
     throw ApiException(body['detail'] ?? 'Lỗi AI chat');
+  }
+
+  // ── Phase 4: Skill Page Learning Flow (SCORM & RAG) ─────────────────────
+
+  static Future<List<dynamic>> getLessons(String skillId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/skills/$skillId/lessons'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    throw ApiException('Lỗi tải bài học');
+  }
+
+  static Future<void> updateLessonProgress({
+    required String userId,
+    required String lessonId,
+    required double progress,
+    required String status,
+    int score = 0,
+    int timeSpent = 0,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/learning/progress'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'user_id': userId,
+        'lesson_id': lessonId,
+        'progress': progress,
+        'status': status,
+        'score': score,
+        'time_spent': timeSpent,
+      }),
+    );
+    if (response.statusCode != 200) throw ApiException('Lỗi cập nhật tiến trình SCORM');
+  }
+
+  static Future<List<dynamic>> getLessonQuiz(String lessonId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/learning/quiz/$lessonId'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as List;
+    throw ApiException('Lỗi tải câu hỏi quizzes');
+  }
+
+  static Future<Map<String, dynamic>> submitLessonQuiz({
+    required String userId,
+    required String lessonId,
+    required List<Map<String, dynamic>> answers,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/api/learning/quiz_submit'),
+      headers: {'Content-Type': 'application/json; charset=UTF-8'},
+      body: jsonEncode({
+        'user_id': userId,
+        'lesson_id': lessonId,
+        'answers': answers,
+      }),
+    );
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    throw ApiException('Lỗi lưu kết quả quiz');
+  }
+
+  static Future<Map<String, dynamic>> getAiRecommendation(String userId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/api/ai/recommendation/$userId'));
+    if (response.statusCode == 200) return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    throw ApiException('Lỗi AI phân tích recommendation');
   }
 }
 

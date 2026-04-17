@@ -16,7 +16,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   String _userName = '';
   Map<String, dynamic> _progress = {};
-  List<dynamic> _dailyTips = [];
   bool _loading = true;
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
@@ -38,19 +37,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<void> _init() async {
     final user = await AuthManager.getUser();
     final progress = await UserProgressManager.getSummary();
-    List<dynamic> tipsToShow = [];
-    try {
-      final tips = await ApiService.getFun();
-      if (tips.isNotEmpty) {
-        tips.shuffle();
-        tipsToShow = tips.take(4).toList();
-      }
-    } catch (_) {}
     if (mounted) {
       setState(() {
         _userName = user['name'] ?? '';
         _progress = progress;
-        _dailyTips = tipsToShow;
         _loading = false;
       });
       _animCtrl.forward();
@@ -86,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     _buildHeroHeader(),
                     _buildXpStreakBar(),
-                    _buildDailyTip(),
                     _buildSectionTitle('🚀 Khám phá nhanh'),
                     _buildQuickGrid(),
                     _buildSectionTitle('🎯 Hành trình học tập'),
@@ -182,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final level = _progress['level'] ?? 1;
     final label = _progress['levelLabel'] ?? 'Người mới';
     final completed = _progress['completedSkills'] ?? 0;
-    final saved = _progress['savedTips'] ?? 0;
+    final bookmarked = _progress['bookmarkedNews'] ?? 0;
 
     // XP thresholds
     final thresholds = [0, 20, 50, 100, 200, 999];
@@ -233,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           const SizedBox(height: 14),
           Row(children: [
             _miniStat('🏅', '$completed', 'Kỹ năng'),
-            _miniStat('💾', '$saved', 'Mẹo đã lưu'),
+            _miniStat('📰', '$bookmarked', 'Tin đã lưu'),
             _miniStat('🔥', '${_progress['streak'] ?? 0}', 'Ngày streak'),
           ]),
         ],
@@ -252,53 +241,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildDailyTip() {
-    if (_dailyTips.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-        child: Row(children: [
-          const Text('💡', style: TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Text('Mẹo hôm nay', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: const Color(0xFFD97706), fontSize: 16)),
-          const Spacer(),
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/fun'),
-            child: Text('Tất cả mẹo →', style: GoogleFonts.outfit(color: const Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w600)),
-          ),
-        ]),
-      ),
-      SizedBox(
-        height: 150,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          itemCount: _dailyTips.length,
-          itemBuilder: (ctx, i) {
-            final tip = _dailyTips[i];
-            return Container(
-              width: 280,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFFF7ED), Color(0xFFFFFBEB)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFFBBF24).withValues(alpha: 0.4)),
-                boxShadow: [BoxShadow(color: const Color(0xFFD97706).withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(tip['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15, color: const Color(0xFFB45309))),
-                const SizedBox(height: 6),
-                Expanded(child: Text(tip['content'] ?? '', maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(color: Colors.grey.shade800, fontSize: 13, height: 1.5))),
-              ]),
-            );
-          },
-        ),
-      ),
-    ]);
-  }
-
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
@@ -315,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         Row(children: [
           Expanded(child: _quickCardSmall('Sân Chơi', Icons.videogame_asset_rounded, const Color(0xFF059669), '/playground')),
           const SizedBox(width: 12),
-          Expanded(child: _quickCardSmall('Mẹo Vặt', Icons.lightbulb_rounded, const Color(0xFFD97706), '/fun')),
+          Expanded(child: _quickCardSmall('Cộng Đồng', Icons.people_rounded, const Color(0xFF7C3AED), '/community')),
           const SizedBox(width: 12),
           Expanded(child: _quickCardSmall('Tin Tức', Icons.newspaper_rounded, const Color(0xFF0891B2), '/news')),
         ]),
@@ -385,11 +327,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         const SizedBox(height: 10),
         _journeyCard(
-          '💡 Học mẹo vặt',
-          'Áp dụng ngay vào cuộc sống hàng ngày',
-          'Vào Mẹo vặt →',
-          const Color(0xFFD97706),
-          () => Navigator.pushReplacementNamed(context, '/fun'),
+          '🎮 Thử thách bản thân',
+          'Tham gia Sân chơi để rèn luyện kỹ năng',
+          'Vào Sân chơi →',
+          const Color(0xFF059669),
+          () => Navigator.pushReplacementNamed(context, '/playground'),
         ),
         const SizedBox(height: 10),
         _journeyCard(

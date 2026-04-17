@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/api_service.dart';
 import '../utils/auth_manager.dart';
+import '../main.dart'; // import RootApp
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -56,7 +57,13 @@ class _AuthScreenState extends State<AuthScreen>
         _loginPassCtrl.text,
       );
       await AuthManager.saveUser(user);
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        if (user['role'] == 'admin') {
+          RootApp.restartApp(context, '/admin_dashboard', 'admin');
+        } else {
+          Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        }
+      }
     } on ApiException catch (e) {
       _showError(e.message);
     } catch (_) {

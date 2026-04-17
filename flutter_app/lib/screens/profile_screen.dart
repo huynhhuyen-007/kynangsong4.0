@@ -151,7 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: _uploadingAvatar
                     ? const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
                     : _avatarUrl.isNotEmpty
-                        ? Image.network('http://10.0.2.2:8000$_avatarUrl', fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.person, size: 40))
+                        ? Image.network('http://192.168.8.200:8000$_avatarUrl', fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.person, size: 40))
                         : Center(child: Text(
                             _name.isNotEmpty ? _name[0].toUpperCase() : '?',
                             style: GoogleFonts.outfit(fontSize: 34, fontWeight: FontWeight.w800, color: const Color(0xFF4F46E5)),
