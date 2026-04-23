@@ -1,6 +1,9 @@
 """
 seed_questions.py - Seed cau hoi mau cho he thong San Choi (Phase 2)
 Chay: python seed_questions.py
+
+Cau hinh MongoDB lay tu file .env (thong qua core/config.py).
+Khong hardcode credential trong file nay.
 """
 import asyncio
 import sys
@@ -8,12 +11,12 @@ import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 
+# Lay MONGO_URL va DB_NAME tu .env thong qua core/config.py
+from core.config import settings
+
 # Fix encoding tren Windows
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
-
-MONGO_URL = "mongodb+srv://huynhhuyen01022004_db_user:JnR2UDe7WftTl4nL@cluster0.zpr4s7u.mongodb.net/?appName=Cluster0"
-DB_NAME = "ky_nang_song"
 
 QUESTIONS = [
     # ── Vòng 1: Kỹ năng giao tiếp ──────────────────────────────────────────
@@ -221,8 +224,8 @@ QUESTIONS = [
 
 async def main():
     print("[*] Dang ket noi MongoDB...")
-    client = AsyncIOMotorClient(MONGO_URL, tls=True, tlsCAFile=certifi.where())
-    db = client[DB_NAME]
+    client = AsyncIOMotorClient(settings.MONGO_URL, tls=True, tlsCAFile=certifi.where())
+    db = client[settings.DB_NAME]
     col = db["questions"]
 
     # Xoa cau hoi cu (neu co) de seed lai sach

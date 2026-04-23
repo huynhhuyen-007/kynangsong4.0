@@ -85,6 +85,18 @@ class KyNangSongApp extends StatelessWidget {
         title: loc.appName,
         debugShowCheckedModeBanner: false,
         themeMode: appProvider.themeMode,
+        builder: (context, child) {
+          // Clamp text scale to prevent layout overflow on large-font devices
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: MediaQuery.of(context).textScaler.clamp(
+                minScaleFactor: 0.85,
+                maxScaleFactor: 1.1,
+              ),
+            ),
+            child: child!,
+          );
+        },
 
         // ── Light Theme ────────────────────────────────────────────────────
         theme: ThemeData(
@@ -108,7 +120,13 @@ class KyNangSongApp extends StatelessWidget {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              textStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(
+                inherit: false,
+                fontFamily: 'Outfit',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
           ),
           inputDecorationTheme: InputDecorationTheme(
@@ -149,6 +167,13 @@ class KyNangSongApp extends StatelessWidget {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(
+                inherit: false,
+                fontFamily: 'Outfit',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
           ),
           inputDecorationTheme: InputDecorationTheme(

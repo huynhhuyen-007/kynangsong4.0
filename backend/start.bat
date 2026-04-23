@@ -5,14 +5,14 @@ echo  Database: MongoDB
 echo ========================================
 echo.
 
-REM Kiem tra MongoDB co dang chay khong
-mongod --version >nul 2>&1
+REM Kiem tra MongoDB Service co dang chay khong
+sc query MongoDB >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [CANH BAO] Khong tim thay MongoDB!
-    echo Hay tai va cai dat MongoDB tai: https://www.mongodb.com/try/download/community
+    echo [CANH BAO] MongoDB Service chua chay!
+    echo Hay vao Services ^(services.msc^) va bat MongoDB, hoac tai tai: https://www.mongodb.com/try/download/community
     echo.
 ) else (
-    echo [OK] MongoDB da duoc cai dat.
+    echo [OK] MongoDB Service dang chay.
 )
 
 echo [*] Khoi dong FastAPI Backend...

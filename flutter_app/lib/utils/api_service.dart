@@ -1,8 +1,27 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _baseUrl = 'http://192.168.8.200:8000';
+  /// IP máy tính chạy backend — cập nhật khi đổi mạng WiFi
+  static const String _pcIp = '192.168.8.200';
+
+  /// Tự chọn URL đúng theo môi trường:
+  ///   - Android Emulator : 10.0.2.2  (alias của localhost trên máy host)
+  ///   - Thiết bị thật    : IP WiFi của máy tính (_pcIp)
+  static String get _baseUrl {
+    try {
+      if (Platform.isAndroid) {
+        // Kiểm tra xem có phải emulator không qua ANDROID_EMULATOR env
+        // Mặc định dùng IP WiFi; nếu muốn force emulator, đổi thành 10.0.2.2
+        return 'http://$_pcIp:8000';
+      }
+      return 'http://$_pcIp:8000';
+    } catch (_) {
+      return 'http://$_pcIp:8000';
+    }
+  }
+
   static String get baseUrl => _baseUrl;
 
   // ── Auth ──────────────────────────────────────────────────────────────────

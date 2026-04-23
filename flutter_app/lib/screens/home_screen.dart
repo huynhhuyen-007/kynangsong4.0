@@ -115,53 +115,61 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
           const SizedBox(height: 12),
-          if (streak > 0)
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('🔥', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Chuỗi $streak ngày học liên tiếp!',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
-                  ),
-                ]),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pushReplacementNamed(context, '/skills'),
-                icon: const Icon(Icons.rocket_launch_rounded, size: 20, color: Color(0xFF4F46E5)),
-                label: Text('Tiếp tục học', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 15)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), elevation: 6, shadowColor: Colors.black38),
-              ),
-            ])
-          else
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '✨ Bắt đầu học hôm nay để tạo streak!',
-                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pushReplacementNamed(context, '/skills'),
-                icon: const Icon(Icons.rocket_launch_rounded, size: 20, color: Color(0xFF4F46E5)),
-                label: Text('🚀 Học ngay', style: GoogleFonts.outfit(color: const Color(0xFF4F46E5), fontWeight: FontWeight.w800, fontSize: 15)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), elevation: 6, shadowColor: Colors.black38),
-              ),
-            ]),
+              child: streak > 0
+                  ? Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Text('🔥', style: TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Chuỗi $streak ngày học liên tiếp!',
+                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ])
+                  : Text(
+                      '✨ Bắt đầu học hôm nay để tạo streak!',
+                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            _buildStartButton(streak > 0 ? 'Tiếp tục học' : '🚀 Học ngay'),
+          ]),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStartButton(String label) {
+    return ElevatedButton.icon(
+      onPressed: () => Navigator.pushReplacementNamed(context, '/skills'),
+      icon: const Icon(Icons.rocket_launch_rounded, size: 20, color: Color(0xFF4F46E5)),
+      label: Text(
+        label,
+        style: const TextStyle(
+          inherit: false,
+          color: Color(0xFF4F46E5),
+          fontWeight: FontWeight.w800,
+          fontSize: 15,
+          fontFamily: 'Outfit',
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        elevation: 6,
+        shadowColor: Colors.black38,
+        textStyle: const TextStyle(
+          inherit: false,
+          fontFamily: 'Outfit',
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

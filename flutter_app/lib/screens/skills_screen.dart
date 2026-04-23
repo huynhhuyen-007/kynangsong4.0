@@ -30,7 +30,6 @@ class _SkillsScreenState extends State<SkillsScreen> {
     super.initState();
     _loadSkills();
     _loadCompleted();
-    _loadAiRecommendation();
   }
 
   Future<void> _loadCompleted() async {
@@ -103,7 +102,6 @@ class _SkillsScreenState extends State<SkillsScreen> {
           : Column(
               children: [
                 _buildProgressHeader(),
-                _buildAiRecommendation(),
                 _buildCategoryFilter(),
                 Expanded(child: _buildList()),
               ],

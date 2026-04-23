@@ -2,8 +2,10 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 
-MONGO_URL = "mongodb+srv://huynhhuyen01022004_db_user:JnR2UDe7WftTl4nL@cluster0.zpr4s7u.mongodb.net/?appName=Cluster0"
-DB_NAME = "ky_nang_song"
+# Lay MONGO_URL va DB_NAME tu .env thong qua core/config.py
+# Khong hardcode credential trong file nay
+from core.config import settings
+
 
 news_data = [
     {
@@ -126,8 +128,8 @@ posts_data = [
 ]
 
 async def seed():
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
+    client = AsyncIOMotorClient(settings.MONGO_URL)
+    db = client[settings.DB_NAME]
     
     # Xóa dữ liệu cũ
     await db["news"].delete_many({})

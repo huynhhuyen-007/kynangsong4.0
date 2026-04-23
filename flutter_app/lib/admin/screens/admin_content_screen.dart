@@ -640,8 +640,7 @@ class _SkillFormSheetState extends State<_SkillFormSheet> {
     setState(() { _pickedFile = file; _uploading = true; });
     try {
       final url = await ApiService.uploadSkillImage(widget.adminId, picked.path);
-      final baseUrl = 'http://192.168.8.200:8000';
-      final fullUrl = url.startsWith('http') ? url : '$baseUrl$url';
+      final fullUrl = url.startsWith('http') ? url : '${ApiService.baseUrl}$url';
       setState(() { _imageUrl = fullUrl; _uploading = false; });
     } catch (e) {
       setState(() { _uploading = false; _pickedFile = null; });
@@ -917,8 +916,7 @@ class _NewsFormSheetState extends State<_NewsFormSheet> {
     setState(() { _pickedFile = file; _uploading = true; });
     try {
       final url = await ApiService.uploadSkillImage(widget.adminId, picked.path);
-      final baseUrl = 'http://192.168.8.200:8000';
-      final fullUrl = url.startsWith('http') ? url : '$baseUrl$url';
+      final fullUrl = url.startsWith('http') ? url : '${ApiService.baseUrl}$url';
       setState(() { _imageUrl = fullUrl; _uploading = false; });
     } catch (e) {
       setState(() { _uploading = false; _pickedFile = null; });
