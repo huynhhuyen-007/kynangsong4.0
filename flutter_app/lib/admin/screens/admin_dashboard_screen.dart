@@ -147,6 +147,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildStatCard(_StatCard card) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () => Navigator.pushReplacementNamed(context, card.route),
       child: Container(
@@ -154,7 +155,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         decoration: BoxDecoration(
           color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AdminTheme.border),
+          border: Border.all(
+            color: isDark ? AdminTheme.border : const Color(0xFFE2E8F0),
+          ),
+          boxShadow: isDark
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
         ),
         child: Row(
           children: [
@@ -173,13 +185,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(card.value,
-                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AdminTheme.textPrimary)),
+                    style: GoogleFonts.outfit(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? AdminTheme.textPrimary : const Color(0xFF111111),
+                    )),
                   Text(card.label,
-                    style: GoogleFonts.outfit(fontSize: 11, color: AdminTheme.textSecondary)),
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AdminTheme.textSecondary : const Color(0xFF555555),
+                    )),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: AdminTheme.textMuted, size: 18),
+            Icon(Icons.chevron_right_rounded,
+                color: isDark ? AdminTheme.textMuted : const Color(0xFF888888),
+                size: 18),
           ],
         ),
       ),
@@ -223,41 +245,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _alertBanner(IconData icon, String text, Color color, {required String route}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () => Navigator.pushReplacementNamed(context, route),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: isDark
+              ? color.withOpacity(0.15)
+              : color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(
+            color: isDark ? color.withOpacity(0.5) : color.withOpacity(0.7),
+            width: 1.5,
+          ),
         ),
         child: Row(children: [
-          Icon(icon, color: color, size: 16),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(text,
-              style: GoogleFonts.outfit(fontSize: 13, color: color, fontWeight: FontWeight.w600)),
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: isDark ? color : color.withRed((color.red * 0.75).round()),
+                fontWeight: FontWeight.w700,
+              )),
           ),
-          Text('Xem →', style: GoogleFonts.outfit(fontSize: 12, color: color)),
+          Icon(Icons.arrow_forward_ios_rounded, size: 12, color: color),
         ]),
       ),
     );
   }
 
   Widget _buildSystemInfo() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminTheme.border),
+        border: Border.all(
+          color: isDark ? AdminTheme.border : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Thông tin hệ thống',
-            style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700, color: AdminTheme.textPrimary)),
+            style: GoogleFonts.outfit(
+              fontSize: 14, fontWeight: FontWeight.w700,
+              color: isDark ? AdminTheme.textPrimary : const Color(0xFF111111),
+            )),
           const SizedBox(height: 12),
           _infoRow('Admin ID', _admin?['id'] ?? '—'),
           const Divider(color: AdminTheme.border, height: 20),
@@ -272,13 +326,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _infoRow(String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(children: [
       SizedBox(width: 80,
         child: Text(label,
-          style: GoogleFonts.outfit(fontSize: 12, color: AdminTheme.textSecondary))),
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? AdminTheme.textSecondary : const Color(0xFF555555),
+          ))),
       Expanded(
         child: Text(value,
-          style: GoogleFonts.outfit(fontSize: 13, color: AdminTheme.textPrimary, fontWeight: FontWeight.w500),
+          style: GoogleFonts.outfit(
+            fontSize: 13,
+            color: isDark ? AdminTheme.textPrimary : const Color(0xFF111111),
+            fontWeight: FontWeight.w600,
+          ),
           overflow: TextOverflow.ellipsis)),
     ]);
   }

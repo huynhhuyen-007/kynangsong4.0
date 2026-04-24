@@ -84,13 +84,14 @@ class AdminTheme {
     ),
   );
 
-  // ── Light Theme ──────────────────────────────────────────────────────────
+  // ── Light Color Palette ─────────────────────────────────────────────────
   static const Color _lightBg     = Color(0xFFF6F8FA);
   static const Color _lightSurf   = Color(0xFFFFFFFF);
   static const Color _lightCard   = Color(0xFFFFFFFF);
   static const Color _lightBorder = Color(0xFFD0D7DE);
-  static const Color _lightText   = Color(0xFF1F2328);
-  static const Color _lightSub    = Color(0xFF656D76);
+  static const Color _lightText   = Color(0xFF111111);  // primary — WCAG AA
+  static const Color _lightSub    = Color(0xFF444444);  // secondary
+  static const Color _lightHint   = Color(0xFF777777);  // metadata/hint
 
   static ThemeData get lightTheme => ThemeData(
     useMaterial3: true,
@@ -104,6 +105,9 @@ class AdminTheme {
       onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: _lightText,
+      onSurfaceVariant: _lightSub,
+      outline: _lightBorder,
+      outlineVariant: Color(0xFFE8ECF0),
     ),
     textTheme: GoogleFonts.outfitTextTheme().apply(
       bodyColor: _lightText,
@@ -128,6 +132,15 @@ class AdminTheme {
     elevatedButtonTheme: _elevatedBtn(),
     textButtonTheme: _textBtn(),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: _lightSub)),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: _lightSurf,
+      indicatorColor: blue.withOpacity(0.12),
+      selectedIconTheme: const IconThemeData(color: blue),
+      unselectedIconTheme: IconThemeData(color: _lightSub),
+      selectedLabelTextStyle: GoogleFonts.outfit(color: blue, fontWeight: FontWeight.w700, fontSize: 12),
+      unselectedLabelTextStyle: GoogleFonts.outfit(color: _lightSub, fontSize: 12),
+      elevation: 0, useIndicator: true,
+    ),
     popupMenuTheme: PopupMenuThemeData(
       color: _lightSurf, elevation: 8,
       shape: RoundedRectangleBorder(

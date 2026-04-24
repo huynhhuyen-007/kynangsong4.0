@@ -12,6 +12,7 @@ import 'screens/news_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/community_screen.dart';
 import 'screens/copilot_screen.dart';
+import 'screens/forgot_password_screen.dart';
 import 'admin/admin_app.dart';
 
 void main() async {
@@ -22,7 +23,7 @@ void main() async {
   
   if (loggedIn) {
     final user = await AuthManager.getUser();
-    role = user?['role'];
+    role = user['role'];
     initialRoute = role == 'admin' ? '/admin_dashboard' : '/home';
   }
 
@@ -150,6 +151,11 @@ class KyNangSongApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF4F46E5),
             brightness: Brightness.dark,
+          ).copyWith(
+            onSurface: Colors.white,                          // primary text
+            onSurfaceVariant: const Color(0xFFB0B0B0),       // secondary text
+            surface: const Color(0xFF1A1A2E),
+            surfaceContainerHighest: const Color(0xFF252540),
           ),
           textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
           useMaterial3: true,
@@ -201,14 +207,15 @@ class KyNangSongApp extends StatelessWidget {
 
         initialRoute: initialRoute,
         routes: {
-          '/auth':      (_) => const AuthScreen(),
-          '/home':      (_) => const HomeScreen(),
-          '/community': (_) => const CommunityScreen(),
-          '/playground':(_) => const PlaygroundScreen(),
-          '/skills':    (_) => const SkillsScreen(),
-          '/news':      (_) => const NewsScreen(),
-          '/profile':   (_) => const ProfileScreen(),
-          '/copilot':   (_) => const CopilotScreen(),
+          '/auth':             (_) => const AuthScreen(),
+          '/home':             (_) => const HomeScreen(),
+          '/community':        (_) => const CommunityScreen(),
+          '/playground':       (_) => const PlaygroundScreen(),
+          '/skills':           (_) => const SkillsScreen(),
+          '/news':             (_) => const NewsScreen(),
+          '/profile':          (_) => const ProfileScreen(),
+          '/copilot':          (_) => const CopilotScreen(),
+          '/forgot_password':  (_) => const ForgotPasswordScreen(),
         },
     );
   }

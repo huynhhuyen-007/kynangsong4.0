@@ -4,22 +4,19 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   /// IP máy tính chạy backend — cập nhật khi đổi mạng WiFi
-  static const String _pcIp = '192.168.8.200';
+  static const String _pcIp = '192.168.1.53';
 
-  /// Tự chọn URL đúng theo môi trường:
-  ///   - Android Emulator : 10.0.2.2  (alias của localhost trên máy host)
-  ///   - Thiết bị thật    : IP WiFi của máy tính (_pcIp)
+  /// ⚙️ Đổi thành true khi test trên Android Emulator
+  /// Đổi thành false khi test trên thiết bị thật (dùng WiFi IP)
+  static const bool _isEmulator = true;
+
   static String get _baseUrl {
-    try {
-      if (Platform.isAndroid) {
-        // Kiểm tra xem có phải emulator không qua ANDROID_EMULATOR env
-        // Mặc định dùng IP WiFi; nếu muốn force emulator, đổi thành 10.0.2.2
-        return 'http://$_pcIp:8000';
-      }
-      return 'http://$_pcIp:8000';
-    } catch (_) {
-      return 'http://$_pcIp:8000';
+    if (_isEmulator) {
+      // Android Emulator: 10.0.2.2 = localhost của máy tính host
+      return 'http://10.0.2.2:8000';
     }
+    // Thiết bị thật: cần cùng WiFi với máy tính chạy backend
+    return 'http://$_pcIp:8000';
   }
 
   static String get baseUrl => _baseUrl;
@@ -41,6 +38,27 @@ class ApiService {
     final body = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200) return body as Map<String, dynamic>;
     throw ApiException(body['detail'] ?? 'Đăng ký thất bại.');
+  }
+
+  /// Gửi yêu cầu khôi phục mật khẩu.
+  /// Trả về {"status": "sent", "demo_token": "123456"} (demo mode).
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final response = await http.post(Uri.parse('$_baseUrl/api/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}));
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode == 200) return body as Map<String, dynamic>;
+    throw ApiException(body['detail'] ?? 'Có lỗi xảy ra.');
+  }
+
+  /// Đặt lại mật khẩu bằng token nhận được.
+  static Future<void> resetPassword(String token, String newPassword) async {
+    final response = await http.post(Uri.parse('$_baseUrl/api/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': token, 'new_password': newPassword}));
+    if (response.statusCode == 200) return;
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    throw ApiException(body['detail'] ?? 'Mã xác nhận không hợp lệ.');
   }
 
   static Future<String> uploadAvatar(String userId, String filePath) async {
@@ -112,13 +130,34 @@ class ApiService {
   static Future<Map<String, dynamic>> createPost({
     required String userId, required String userName,
     required String content, required String topic,
+    String? imageUrl,
   }) async {
     final response = await http.post(Uri.parse('$_baseUrl/api/community/posts'),
         headers: {'Content-Type': 'application/json; charset=UTF-8'},
-        body: jsonEncode({'user_id': userId, 'user_name': userName, 'content': content, 'topic': topic}));
+        body: jsonEncode({
+          'user_id': userId,
+          'user_name': userName,
+          'content': content,
+          'topic': topic,
+          if (imageUrl != null) 'image_url': imageUrl,
+        }));
     final body = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200) return body as Map<String, dynamic>;
     throw ApiException(body['detail'] ?? 'Đăng bài thất bại');
+  }
+
+  static Future<String> uploadCommunityImage(String filePath) async {
+    final request = http.MultipartRequest(
+        'POST', Uri.parse('$_baseUrl/api/community/upload-image'));
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final response = await request.send();
+    final respStr = await response.stream.bytesToString();
+    if (response.statusCode == 200) {
+      final body = jsonDecode(respStr);
+      return body['image_url'] as String;
+    }
+    final err = jsonDecode(respStr);
+    throw ApiException(err['detail'] ?? 'Lỗi upload ảnh');
   }
 
   static Future<Map<String, dynamic>> toggleLike(String postId, String userId) async {
@@ -373,12 +412,25 @@ class ApiService {
     throw ApiException(body['detail'] ?? 'Lỗi AI phân tích');
   }
 
-  /// AI Chat context-aware (biết tiến độ học của user)
-  static Future<Map<String, dynamic>> contextChat(String query, String userId) async {
+  /// AI Chat context-aware (biết tiến độ học của user + conversation memory)
+  static Future<Map<String, dynamic>> contextChat(
+    String query,
+    String userId, {
+    List<Map<String, String>> history = const [],
+    String sessionSummary = '',
+    Map<String, dynamic> conversationState = const {},
+  }) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/api/ai/context-chat'),
       headers: {'Content-Type': 'application/json; charset=UTF-8'},
-      body: jsonEncode({'query': query, 'user_id': userId, 'include_progress': true}),
+      body: jsonEncode({
+        'query': query,
+        'user_id': userId,
+        'include_progress': true,
+        'history': history,
+        'session_summary': sessionSummary,
+        'conversation_state': conversationState,
+      }),
     );
     final body = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode == 200) return body as Map<String, dynamic>;

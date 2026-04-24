@@ -90,57 +90,84 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildHeroHeader() {
     final streak = _progress['streak'] ?? 0;
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _greeting() + ',',
-            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 15),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _userName.isEmpty ? 'Bạn ơi 👋' : '$_userName 👋',
-            style: GoogleFonts.outfit(
-              fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white,
+    return Stack(
+      children: [
+        // Base gradient
+        Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
-          const SizedBox(height: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(20),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _greeting() + ',',
+                style: GoogleFonts.outfit(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              child: streak > 0
-                  ? Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Text('🔥', style: TextStyle(fontSize: 16)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Chuỗi $streak ngày học liên tiếp!',
-                        style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                    ])
-                  : Text(
-                      '✨ Bắt đầu học hôm nay để tạo streak!',
-                      style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
-                    ),
+              const SizedBox(height: 4),
+              Text(
+                _userName.isEmpty ? 'Bạn ơi 👋' : '$_userName 👋',
+                style: GoogleFonts.outfit(
+                  fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
+                  ),
+                  child: streak > 0
+                      ? Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Text('🔥', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Chuỗi $streak ngày học liên tiếp!',
+                            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700),
+                          ),
+                        ])
+                      : Text(
+                          '✨ Bắt đầu học hôm nay để tạo streak!',
+                          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                ),
+                const SizedBox(height: 16),
+                _buildStartButton(streak > 0 ? 'Tiếp tục học' : '🚀 Học ngay'),
+              ]),
+            ],
+          ),
+        ),
+        // Dark overlay for better text contrast in dark mode
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.15),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-            _buildStartButton(streak > 0 ? 'Tiếp tục học' : '🚀 Học ngay'),
-          ]),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -191,9 +218,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,12 +272,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _miniStat(String emoji, String val, String label) {
+    final cs = Theme.of(context).colorScheme;
     return Expanded(
       child: Column(children: [
         Text(emoji, style: const TextStyle(fontSize: 20)),
         const SizedBox(height: 2),
-        Text(val, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: const Color(0xFF1E1B4B))),
-        Text(label, style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey.shade500)),
+        Text(val, style: GoogleFonts.outfit(
+          fontWeight: FontWeight.w800, fontSize: 18,
+          color: cs.onSurface,
+        )),
+        Text(label, style: GoogleFonts.outfit(
+          fontSize: 10,
+          color: cs.onSurfaceVariant,
+        )),
       ]),
     );
   }
@@ -252,7 +292,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-      child: Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF1E1B4B))),
+      child: Text(title, style: GoogleFonts.outfit(
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        color: Theme.of(context).colorScheme.onSurface,
+      )),
     );
   }
 
@@ -302,21 +346,28 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _quickCardSmall(String title, IconData icon, Color color, String route) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => Navigator.pushReplacementNamed(context, route),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 4))],
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 4)),
+          ],
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: color, size: 30),
           const SizedBox(height: 10),
-          Text(title, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1E1B4B))),
+          Text(title, style: GoogleFonts.outfit(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface,
+          )),
         ]),
       ),
     );
@@ -354,15 +405,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _journeyCard(String title, String subtitle, String cta, Color color, VoidCallback onTap) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.07), blurRadius: 10, offset: const Offset(0, 4))],
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
         ),
         child: Row(children: [
           Container(
@@ -371,9 +425,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14, color: const Color(0xFF1E1B4B))),
+            Text(title, style: GoogleFonts.outfit(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: cs.onSurface,
+            )),
             const SizedBox(height: 3),
-            Text(subtitle, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey.shade600)),
+            Text(subtitle, style: GoogleFonts.outfit(
+              fontSize: 12,
+              color: cs.onSurfaceVariant,
+            )),
           ])),
           Text(cta, style: GoogleFonts.outfit(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
         ]),
