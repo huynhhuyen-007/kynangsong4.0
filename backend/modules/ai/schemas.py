@@ -11,6 +11,11 @@ class ContextChatRequest(BaseModel):
     query: str
     user_id: str
     include_progress: bool = True
+    # Conversation memory — gửi từ Flutter
+    history: list[dict] = []        # [{"role": "user|assistant", "content": "..."}]
+    session_summary: str = ""       # Tóm tắt đầu session để tránh token overflow
+    # Context awareness — Flutter gửi kèm để intent detection chính xác hơn
+    conversation_state: dict = {}   # {"topic": "...", "last_intent": 1, "turn_count": 0}
 
 
 class RecommendRequest(BaseModel):

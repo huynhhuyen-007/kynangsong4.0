@@ -20,14 +20,25 @@ class _CopilotScreenState extends State<CopilotScreen>
   bool _loading = false;
   String _userId = '';
 
-  // Lịch sử chat
+  // Conversation memory — gửi lên backend mỗi lần chat
+  final List<Map<String, String>> _chatHistory = [];
+
+  // Context Awareness — backend dùng để detect intent chính xác hơn
+  Map<String, dynamic> _conversationState = {'topic': null, 'last_intent': 0, 'turn_count': 0};
+
+  // Track expanded state cho từng message (index → isExpanded)
+  final Map<int, bool> _expandedMessages = {};
+
+  // Lịch sử chat hiển thị trên UI
   final List<Map<String, dynamic>> _messages = [
     {
       'isBot': true,
-      'text':
-          'Chào bạn! Mình là **🦉 AI Mentor Owl** - Trợ lý kỹ năng sống thông minh!\n\nMình đã kết nối với hồ sơ học tập của bạn và sẽ đưa ra lời khuyên **cá nhân hóa** dựa trên tiến độ trên bản đồ kỹ năng. Hãy hỏi bất kỳ điều gì nhé!',
+      'text': 'Chào bạn! 👋 Mình là **Owl** – trợ lý kỹ năng sống của bạn.\n\nBạn muốn bắt đầu với chủ đề nào?\n🗣️ **Giao tiếp & Thuyết trình**\n💰 **Quản lý tài chính**\n🧠 **Cải thiện bản thân**\n\nHoặc cứ hỏi thẳng điều bạn đang cần nhé!',
       'skills': [],
-      'feedback': null, // null = chưa feedback, true = hữu ích, false = không
+      'feedback': null,
+      'intentLevel': 1,
+      'canExpand': false,
+      'fullAnswer': '',
     }
   ];
 
@@ -92,16 +103,42 @@ class _CopilotScreenState extends State<CopilotScreen>
     _scrollToBottom();
 
     try {
-      // Phase 3: Dùng context-chat thay vì chat thông thường
-      // → AI tự động load skill_stats để trả lời cá nhân hóa
-      final response = await ApiService.contextChat(query, _userId);
+      final response = await ApiService.contextChat(
+        query, _userId,
+        history: List.from(_chatHistory),
+        conversationState: Map.from(_conversationState),
+      );
       if (mounted) {
+        final level = (response['intent_level'] as int?) ?? 3;
+        final shortAnswer = response['answer'] as String? ?? 'Không có phản hồi.';
+        final fullAnswer  = response['full_answer'] as String? ?? '';
+        final canExpand   = response['can_expand'] as bool? ?? false;
+
+        // Cập nhật conversation memory
+        _chatHistory.add({'role': 'user', 'content': query});
+        _chatHistory.add({'role': 'assistant', 'content': shortAnswer});
+        if (_chatHistory.length > 6) {
+          _chatHistory.removeRange(0, _chatHistory.length - 6);
+        }
+
+        // Cập nhật context state
         setState(() {
+          _conversationState = {
+            'last_intent': level,
+            'turn_count': (_conversationState['turn_count'] as int) + 1,
+            // Nếu level >= 3, lưu topic từ query để context tiếp theo chính xác hơn
+            'topic': level >= 3 ? query.split(' ').take(4).join(' ') : _conversationState['topic'],
+          };
           _messages.add({
             'isBot': true,
-            'text': response['answer'] ?? 'Không có phản hồi.',
+            'text': shortAnswer,
+            'fullAnswer': fullAnswer,
+            'canExpand': canExpand,
+            'intentLevel': level,
             'skills': response['related_skills'] ?? [],
             'feedback': null,
+            'suggested': response['suggested_questions'] ?? [],
+            'ragUsed': response['rag_used'] ?? false,
           });
           _loading = false;
         });
@@ -109,12 +146,28 @@ class _CopilotScreenState extends State<CopilotScreen>
       }
     } catch (e) {
       if (mounted) {
+        final errMsg = e.toString();
+        String friendlyMsg;
+        if (errMsg.contains('503') || errMsg.contains('UNAVAILABLE') || errMsg.contains('bận')) {
+          friendlyMsg = '🔄 **AI đang bận do nhiều người dùng.**\n\nVui lòng thử lại sau vài giây nhé!';
+        } else if (errMsg.contains('429') || errMsg.contains('quota')) {
+          friendlyMsg = '⚠️ **Đã vượt giới hạn hôm nay.**\n\nVui lòng thử lại vào ngày mai.';
+        } else if (errMsg.contains('SocketException') || errMsg.contains('Connection')) {
+          friendlyMsg = '📵 **Mất kết nối mạng.**\n\nKiểm tra WiFi/4G rồi thử lại.';
+        } else {
+          friendlyMsg = '❌ **Không thể kết nối AI.**\n\nVui lòng thử lại.';
+        }
         setState(() {
           _messages.add({
             'isBot': true,
-            'text': '❌ **Lỗi kết nối AI:** ${e.toString()}\n\nVui lòng kiểm tra kết nối mạng và thử lại.',
+            'text': friendlyMsg,
             'skills': [],
             'feedback': null,
+            'isError': true,
+            'retryQuery': query,
+            'intentLevel': 3,
+            'canExpand': false,
+            'fullAnswer': '',
           });
           _loading = false;
         });
@@ -141,12 +194,92 @@ class _CopilotScreenState extends State<CopilotScreen>
     );
   }
 
+
+  // ── Widget: Nút Xem chi tiết (Progressive Disclosure) ─────────────────────
+  Widget _buildExpandButton(int index, String fullAnswer) {
+    final isExpanded = _expandedMessages[index] ?? false;
+    return Padding(
+      padding: const EdgeInsets.only(left: 40, top: 6),
+      child: GestureDetector(
+        onTap: () => setState(() => _expandedMessages[index] = !isExpanded),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5).withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  size: 16, color: const Color(0xFF4F46E5)),
+              const SizedBox(width: 4),
+              Text(
+                isExpanded ? 'Thu gọn' : '📖 Xem chi tiết',
+                style: GoogleFonts.outfit(
+                    color: const Color(0xFF4F46E5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Widget: Menu chips cho greeting (Level 1) ───────────────────────────────
+  Widget _buildMenuChips() {
+    const chips = [
+      {'emoji': '🗣️', 'label': 'Giao tiếp', 'query': 'Làm sao để giao tiếp tốt hơn?'},
+      {'emoji': '💰', 'label': 'Tài chính', 'query': 'Cách quản lý tài chính sinh viên'},
+      {'emoji': '🧠', 'label': 'Bản thân', 'query': 'Cách cải thiện bản thân mỗi ngày'},
+      {'emoji': '🏥', 'label': 'Sức khỏe', 'query': 'Kỹ năng sơ cứu cơ bản'},
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(left: 40, top: 10),
+      child: Wrap(
+        spacing: 8, runSpacing: 8,
+        children: chips.map((c) => GestureDetector(
+          onTap: _loading ? null : () => _sendMessage(c['query']!),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: const Color(0xFF4F46E5).withOpacity(0.25), blurRadius: 6, offset: const Offset(0, 2))],
+            ),
+            child: Text('${c['emoji']} ${c['label']}',
+                style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
   // ── Widget: Message Bubble ───────────────────────────────────────────────────
   Widget _buildMessage(Map<String, dynamic> msg, int index) {
     final isBot = msg['isBot'] as bool;
-    final text = msg['text'] as String;
+    final rawText = msg['text'] as String;
+    final fullAnswer = msg['fullAnswer'] as String? ?? '';
+    final canExpand  = msg['canExpand'] as bool? ?? false;
+    final intentLevel = msg['intentLevel'] as int? ?? 3;
+    final isExpanded = _expandedMessages[index] ?? false;
     final skills = msg['skills'] as List<dynamic>? ?? [];
     final feedback = msg['feedback'] as bool?;
+    final suggested = msg['suggested'] as List<dynamic>? ?? [];
+    final ragUsed = msg['ragUsed'] as bool? ?? false;
+
+    // ── Message truncation: chỉ cắt bot messages, không cắt Level 4 (full format) ──
+    const _kTruncLimit = 300;
+    final isTruncatable = isBot && rawText.length > _kTruncLimit && intentLevel < 4;
+    final isMsgExpanded = _expandedMessages[-index - 1] ?? false; // dùng key âm để phân biệt expand-full với truncate
+    final text = (isTruncatable && !isMsgExpanded)
+        ? '${rawText.substring(0, _kTruncLimit)}...'
+        : rawText;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -187,7 +320,7 @@ class _CopilotScreenState extends State<CopilotScreen>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
+                        color: Colors.black.withValues(alpha: 0.06),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       )
@@ -218,9 +351,94 @@ class _CopilotScreenState extends State<CopilotScreen>
             ],
           ),
 
-          // ── Feedback Buttons (chỉ hiển thị cho tin nhắn của Bot) ─────────────
-          if (isBot && index > 0) ...[
+          // ── Nút Xem thêm (truncation) ─────────────────────────────────────
+          if (isTruncatable) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: GestureDetector(
+                onTap: () => setState(() => _expandedMessages[-index - 1] = !isMsgExpanded),
+                child: Text(
+                  isMsgExpanded ? '▲ Thu gọn' : '▼ Xem thêm',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF4F46E5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // ── Nút Thử lại (chỉ cho lỗi) ────────────────────────────────────────
+          if (isBot && msg['isError'] == true && msg['retryQuery'] != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: GestureDetector(
+                onTap: _loading ? null : () {
+                  final q = msg['retryQuery'] as String;
+                  setState(() => _messages.removeLast());
+                  _sendMessage(q);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFF4F46E5)),
+                      const SizedBox(width: 6),
+                      Text('Thử lại', style: GoogleFonts.outfit(
+                        color: const Color(0xFF4F46E5), fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // ── Progressive Disclosure: nút Xem chi tiết ──────────────────────
+          if (isBot && canExpand && fullAnswer.isNotEmpty) ...[
+            _buildExpandButton(index, fullAnswer),
+            if (isExpanded) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 40, right: 4),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F0FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.2)),
+                  ),
+                  child: MarkdownBody(
+                    data: fullAnswer,
+                    styleSheet: MarkdownStyleSheet(
+                      p: GoogleFonts.outfit(color: Colors.grey.shade800, fontSize: 14, height: 1.55),
+                      strong: GoogleFonts.outfit(color: const Color(0xFF1E1B4B), fontWeight: FontWeight.bold, fontSize: 14),
+                      listBullet: GoogleFonts.outfit(color: Colors.grey.shade700, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+
+          // ── Menu Chips cho Greeting (Level 1) ─────────────────────────────
+          if (isBot && intentLevel == 1 && msg['isError'] != true)
+            _buildMenuChips(),
+
+          // ── Feedback Buttons (chỉ hiển thị cho tin nhắn bot bình thường) ────────
+          if (isBot && index > 0 && msg['isError'] != true) ...[
             const SizedBox(height: 6),
+
             Padding(
               padding: const EdgeInsets.only(left: 40),
               child: feedback == null
@@ -357,6 +575,61 @@ class _CopilotScreenState extends State<CopilotScreen>
                     ),
                   ),
                 ),
+              ),
+            ),
+          ],
+          // ── RAG Badge (khi AI dùng tài liệu nội bộ) ───────────────────────
+          if (isBot && ragUsed && msg['isError'] != true) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.verified_rounded, size: 11, color: Color(0xFF10B981)),
+                  const SizedBox(width: 3),
+                  Text('Dựa trên tài liệu nội bộ',
+                      style: GoogleFonts.outfit(
+                          fontSize: 10, color: const Color(0xFF10B981),
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Suggested Questions ────────────────────────────────────────
+          if (isBot && suggested.isNotEmpty && msg['isError'] != true) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: Text('Bạn có muốn hỏi:',
+                  style: GoogleFonts.outfit(
+                      fontSize: 11, color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: Wrap(
+                spacing: 6, runSpacing: 6,
+                children: suggested.map((q) {
+                  final qStr = q.toString();
+                  return GestureDetector(
+                    onTap: _loading ? null : () => _sendMessage(qStr),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F0FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF4F46E5).withOpacity(0.3)),
+                      ),
+                      child: Text(qStr,
+                          style: GoogleFonts.outfit(
+                              color: const Color(0xFF4F46E5), fontSize: 11.5,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ],

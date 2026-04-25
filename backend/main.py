@@ -7,7 +7,21 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from core.database import lifespan
+from core.database import lifespan as _db_lifespan
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    """Lifespan: khởi tạo DB + preload embedding model."""
+    async with _db_lifespan(app):
+        # Preload embedding model để lần đầu request không bị lag
+        try:
+            from modules.ai.service import _get_embedder
+            await _get_embedder()
+            print("[OK] Embedding model preloaded!")
+        except Exception as e:
+            print(f"[WARN] Embedding model preload failed: {e}")
+        yield
 
 # ── Khởi tạo app ─────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -41,7 +55,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(BASE_DIR, "static")
 os.makedirs(os.path.join(static_dir, "avatars"), exist_ok=True)
 os.makedirs(os.path.join(static_dir, "skills"), exist_ok=True)
+os.makedirs(os.path.join(static_dir, "community"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 # ── Include Routers (modules mới) ────────────────────────────────────────────
 from modules.auth.router import router as auth_router

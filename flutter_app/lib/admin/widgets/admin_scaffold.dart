@@ -31,6 +31,7 @@ class AdminScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDesktop = MediaQuery.of(context).size.width >= 600;
+    final cs = Theme.of(context).colorScheme;
 
     if (!isDesktop) {
       return Scaffold(
@@ -38,9 +39,9 @@ class AdminScaffold extends StatelessWidget {
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: currentIndex,
           onTap: (index) => _onNavigate(context, index),
-          backgroundColor: AdminTheme.surface,
+          backgroundColor: cs.surface,
           selectedItemColor: AdminTheme.blue,
-          unselectedItemColor: AdminTheme.textSecondary,
+          unselectedItemColor: cs.onSurfaceVariant,
           type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Dashboard'),
@@ -59,7 +60,7 @@ class AdminScaffold extends StatelessWidget {
             selectedIndex: currentIndex,
             onDestinationSelected: (index) => _onNavigate(context, index),
             labelType: NavigationRailLabelType.all,
-            backgroundColor: AdminTheme.surface,
+            backgroundColor: cs.surface,
             leading: Column(
               children: [
                 const SizedBox(height: 16),
@@ -67,7 +68,7 @@ class AdminScaffold extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AdminTheme.blue.withOpacity(0.2),
+                    color: AdminTheme.blue.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.admin_panel_settings, color: AdminTheme.blue),
@@ -106,7 +107,7 @@ class AdminScaffold extends StatelessWidget {
               ),
             ],
           ),
-          const VerticalDivider(thickness: 1, width: 1, color: AdminTheme.border),
+          VerticalDivider(thickness: 1, width: 1, color: cs.outlineVariant),
           Expanded(child: child),
         ],
       ),

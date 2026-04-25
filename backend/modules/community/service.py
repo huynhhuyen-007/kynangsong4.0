@@ -15,6 +15,7 @@ def _serialize_post(p: dict) -> dict:
         "user_name": p.get("user_name", ""),
         "content": p.get("content", ""),
         "topic": p.get("topic", "Chung"),
+        "image_url": p.get("image_url"),          # <-- NEW
         "likes": p.get("likes", []),
         "likes_count": p.get("likes_count", 0),
         "comments_count": p.get("comments_count", 0),
@@ -40,6 +41,7 @@ async def create_post(body: PostCreate) -> dict:
         "user_name": body.user_name,
         "content": body.content,
         "topic": body.topic,
+        "image_url": body.image_url,               # <-- NEW
         "likes": [],
         "likes_count": 0,
         "comments_count": 0,

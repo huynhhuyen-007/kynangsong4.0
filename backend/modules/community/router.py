@@ -1,8 +1,33 @@
-from fastapi import APIRouter
+import os, uuid, shutil
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from .schemas import PostCreate, CommentCreate, LikeRequest, ReportRequest
 from . import service
 
 router = APIRouter(tags=["Community"])
+
+# Thư mục lưu ảnh community
+_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "static", "community")
+os.makedirs(_UPLOAD_DIR, exist_ok=True)
+
+_MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/api/community/upload-image")
+async def upload_community_image(file: UploadFile = File(...)):
+    """Upload ảnh bài đăng cộng đồng. Max 5MB. Trả về image_url."""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file ảnh (image/*).")
+    contents = await file.read()
+    if len(contents) > _MAX_SIZE:
+        raise HTTPException(status_code=400, detail="Ảnh quá lớn (tối đa 5MB).")
+    ext = os.path.splitext(file.filename or "img.jpg")[1] or ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = os.path.join(_UPLOAD_DIR, filename)
+    with open(dest, "wb") as f:
+        f.write(contents)
+    return {"image_url": f"/static/community/{filename}"}
+
+
 
 
 @router.get("/api/community/posts")

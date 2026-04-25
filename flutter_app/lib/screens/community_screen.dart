@@ -170,7 +170,7 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: TabBar(
         controller: _tabController,
         indicatorColor: const Color(0xFF4F46E5),
@@ -188,7 +188,7 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Widget _buildTopicChips() {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -202,7 +202,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                 margin: const EdgeInsets.only(right: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF4F46E5) : const Color(0xFFF0F4FF),
+                  color: isSelected
+                      ? const Color(0xFF4F46E5)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -214,7 +216,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: isSelected ? Colors.white : Colors.grey.shade700,
+                    color: isSelected
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -275,7 +279,7 @@ class _CommunityScreenState extends State<CommunityScreen>
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -316,7 +320,10 @@ class _CommunityScreenState extends State<CommunityScreen>
                         ),
                         Text(
                           _timeAgo(post['created_at'] ?? ''),
-                          style: GoogleFonts.outfit(color: Colors.grey.shade500, fontSize: 12),
+                          style: GoogleFonts.outfit(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -383,9 +390,40 @@ class _CommunityScreenState extends State<CommunityScreen>
                   post['content'] ?? '',
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(fontSize: 15, height: 1.5, color: Colors.grey.shade800, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
+
+              // ── Ảnh đính kèm ──────────────────────────────────────────────
+              if (post['image_url'] != null && (post['image_url'] as String).isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      '${ApiService.baseUrl}${post['image_url']}',
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : Container(
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Icon(Icons.broken_image_rounded,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               // Actions
               Row(

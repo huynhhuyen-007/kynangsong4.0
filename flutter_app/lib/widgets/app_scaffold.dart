@@ -85,10 +85,10 @@ class AppScaffold extends StatelessWidget {
           ],
         ),
         actions: [
-          // Dark/Light toggle button in AppBar
+          // Dark/Light toggle — hiển thị trên AppBar
           IconButton(
             icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
-            tooltip: isDark ? loc.lightMode : loc.darkMode,
+            tooltip: isDark ? 'Chuyển sáng' : 'Chuyển tối',
             onPressed: () => appProvider.toggleTheme(),
           ),
           IconButton(
@@ -230,7 +230,7 @@ class AppScaffold extends StatelessWidget {
             // Settings section
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Text(loc.isEn ? 'SETTINGS' : 'CÀI ĐẶT',
+              child: Text('CÀI ĐẶT',
                   style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -238,14 +238,14 @@ class AppScaffold extends StatelessWidget {
                       letterSpacing: 1.2)),
             ),
 
-            // Dark/Light Mode Toggle
+            // Dark/Light Mode Toggle trong Drawer
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               child: ListTile(
                 leading: Icon(
                     isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
                     color: isDark ? Colors.amber : const Color(0xFF4F46E5)),
-                title: Text(isDark ? loc.lightMode : loc.darkMode,
+                title: Text(isDark ? 'Giao diện sáng' : 'Giao diện tối',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
                 trailing: Switch.adaptive(
                   value: isDark,
@@ -254,41 +254,6 @@ class AppScaffold extends StatelessWidget {
                 ),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 onTap: () => appProvider.toggleTheme(),
-              ),
-            ),
-
-            // Language Toggle
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: ListTile(
-                leading: Text(
-                    appProvider.locale == 'vi' ? '🇻🇳' : '🇬🇧',
-                    style: const TextStyle(fontSize: 22)),
-                title: Text(loc.language,
-                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                trailing: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _LangButton(
-                        label: 'VI',
-                        isActive: appProvider.locale == 'vi',
-                        onTap: () => appProvider.setLocale('vi'),
-                      ),
-                      _LangButton(
-                        label: 'EN',
-                        isActive: appProvider.locale == 'en',
-                        onTap: () => appProvider.setLocale('en'),
-                      ),
-                    ],
-                  ),
-                ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                onTap: () => appProvider.toggleLocale(),
               ),
             ),
 
@@ -379,12 +344,13 @@ class _DrawerNavItem extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        leading: Icon(icon, color: isSelected ? selectedColor : Colors.grey.shade600),
+        leading: Icon(icon,
+            color: isSelected ? selectedColor : Theme.of(context).colorScheme.onSurfaceVariant),
         title: Row(children: [
           Text(label,
               style: GoogleFonts.outfit(
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? selectedColor : Colors.grey.shade800,
+                color: isSelected ? selectedColor : Theme.of(context).colorScheme.onSurface,
               )),
           if (badge != null) ...[
             const SizedBox(width: 8),
@@ -402,35 +368,6 @@ class _DrawerNavItem extends StatelessWidget {
         ]),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         onTap: onTap,
-      ),
-    );
-  }
-}
-
-// ── Language Button ──────────────────────────────────────────────────────────
-class _LangButton extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _LangButton({required this.label, required this.isActive, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF4F46E5) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label,
-            style: GoogleFonts.outfit(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: isActive ? Colors.white : Colors.grey.shade600)),
       ),
     );
   }
